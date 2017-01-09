@@ -1,1 +1,3 @@
 = sgx-catapult =
+
+An XMPP to SMS gateway for Catapult (also known as Bandwidth AP), using XEP-0100.  The "SGX" stands for "Soprani.ca Gateway to XMPP", as this is associated with the Soprani.ca project.

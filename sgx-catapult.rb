@@ -151,66 +151,26 @@ module SGXcatapult
 			msg.add_child(n4)
 			msg.add_child(n5)
 
-			x = Nokogiri::XML::Node.new 'x',orig.document
-			x['xmlns'] = 'jabber:x:data'
-			x['type'] = 'form'
-			msg.add_child(x)
-
-			title = Nokogiri::XML::Node.new 'title',orig.document
-			title.content= 'Register for ' +
+			x = Blather::Stanza::X.new :form, [
+				{:required => true, :type => :"text-single",
+				:label => 'User Id', :var => 'nick'},
+				{:required => true, :type => :"text-single",
+				:label => 'API Token', :var => 'username'},
+				{:required => true, :type => :"text-private",
+				:label => 'API Secret', :var => 'password'},
+				{:required => true, :type => :"text-single",
+				:label => 'Phone Number', :var => 'phone'}
+			]
+			x.title= 'Register for ' +
 				'Soprani.ca Gateway to XMPP - Catapult'
-			x.add_child(title)
-
-			instr = Nokogiri::XML::Node.new 'instructions',
-				orig.document
-			instr.content= "Enter the details from your Account " +
+			x.instructions= "Enter the details from your Account " +
 				"page as well as the Phone Number\nin your " +
 				"account you want to use (ie. '+12345678901')" +
 				".\n\nThe source code for this gateway is at " +
 				"https://github.com/ossguy/sgx-catapult ." +
 				"\nCopyright (C) 2017  Denver Gingerich, " +
 				"licensed under AGPLv3+."
-			x.add_child(instr)
-
-			f1 = Nokogiri::XML::Node.new 'field',orig.document
-			f1['type'] = 'hidden'
-			f1['var'] = 'FORM_TYPE'
-			v1 = Nokogiri::XML::Node.new 'value',orig.document
-			v1.content= 'jabber:iq:register'
-			f1.add_child(v1)
-			x.add_child(f1)
-
-			f2 = Nokogiri::XML::Node.new 'field',orig.document
-			f2['type'] = 'text-single'
-			f2['label'] = 'User Id'
-			f2['var'] = 'nick'
-			v2 = Nokogiri::XML::Node.new 'required',orig.document
-			f2.add_child(v2)
-			x.add_child(f2)
-
-			f3 = Nokogiri::XML::Node.new 'field',orig.document
-			f3['type'] = 'text-single'
-			f3['label'] = 'API Token'
-			f3['var'] = 'username'
-			v3 = Nokogiri::XML::Node.new 'required',orig.document
-			f3.add_child(v3)
-			x.add_child(f3)
-
-			f4 = Nokogiri::XML::Node.new 'field',orig.document
-			f4['type'] = 'text-private'
-			f4['label'] = 'API Secret'
-			f4['var'] = 'password'
-			v4 = Nokogiri::XML::Node.new 'required',orig.document
-			f4.add_child(v4)
-			x.add_child(f4)
-
-			f5 = Nokogiri::XML::Node.new 'field',orig.document
-			f5['type'] = 'text-single'
-			f5['label'] = 'Phone Number'
-			f5['var'] = 'phone'
-			v5 = Nokogiri::XML::Node.new 'required',orig.document
-			f5.add_child(v5)
-			x.add_child(f5)
+			msg.add_child(x)
 
 			orig.add_child(msg)
 			puts "RESPONSE2: #{orig.inspect}"

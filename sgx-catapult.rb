@@ -166,9 +166,9 @@ module SGXcatapult
 	end
 
 	subscription(:request?) do |s|
-		# TODO: fix these - they don't actual work; write does not exist
-		#write(s.approve!)
-		#write(s.request!)
+		# TODO: are these the best to return?  really need '!' here?
+		#write_to_stream s.approve!
+		#write_to_stream s.request!
 	end
 end
 

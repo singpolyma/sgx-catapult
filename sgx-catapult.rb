@@ -52,10 +52,7 @@ module SGXcatapult
 
 		puts "IQ: #{i.inspect}"
 
-		msg = Blather::Stanza::Iq::DiscoItems.new
-		msg.id = i.id
-		msg.to = i.from
-		msg.type = 'result'
+		msg = i.reply
 
 		puts "RESPONSE0: #{msg.inspect}"
 		write_to_stream msg
@@ -67,11 +64,7 @@ module SGXcatapult
 
 		puts "IQ: #{i.inspect}"
 
-		msg = Blather::Stanza::Iq::DiscoInfo.new
-		msg.id = i.id
-		msg.to = i.from
-		msg.type = 'result'
-
+		msg = i.reply
 		msg.identities = [{:name =>
 			'Soprani.ca Gateway to XMPP - Catapult',
 			:type => 'sms-ctplt', :category => 'gateway'}]
@@ -127,20 +120,14 @@ module SGXcatapult
 			end
 
 			# success (for now)
-			msg = Blather::Stanza::Iq.new
-			msg.id = i.id
-			msg.to = i.from
-			msg.type = 'result'
+			msg = i.reply
 
 			puts "RESPONSE3: #{msg.inspect}"
 			write_to_stream msg
 			puts "SENT"
 
 		elsif i.type == :get
-			orig = Blather::Stanza::Iq.new
-			orig.id = i.id
-			orig.to = i.from
-			orig.type = 'result'
+			orig = i.reply
 
 			msg = Nokogiri::XML::Node.new 'query',orig.document
 			msg['xmlns'] = 'jabber:iq:register'

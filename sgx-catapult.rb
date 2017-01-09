@@ -18,6 +18,9 @@
 # with sgx-catapult.  If not, see <http://www.gnu.org/licenses/>.
 
 require 'blather/client/dsl'
+require 'json'
+require 'net/http'
+require 'uri'
 
 if ARGV.size != 4 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -30,6 +33,23 @@ module SGXcatapult
 
 	def self.run
 		client.run
+	end
+
+	def self.error_msg(orig, query_node, type, name, text = nil)
+		orig.add_child(query_node)
+		orig.type = :error
+
+		error = Nokogiri::XML::Node.new 'error', orig.document
+		error['type'] = type
+		orig.add_child(error)
+
+		suberr = Nokogiri::XML::Node.new name, orig.document
+		suberr['xmlns'] = 'urn:ietf:params:xml:ns:xmpp-stanzas'
+		error.add_child(suberr)
+
+		# TODO: add some explanatory xml:lang='en' text (see text param)
+		puts "RESPONSE3: #{orig.inspect}"
+		return orig
 	end
 
 	setup ARGV[0], ARGV[1], ARGV[2], ARGV[3]
@@ -74,43 +94,76 @@ module SGXcatapult
 		if i.type == :set
 			xn = qn.children.find { |v| v.element_name == "x" }
 
-			if xn.nil?
-				puts "id: " + qn.children.find {
-					|v| v.element_name == "nick" }
-				puts "token: " + qn.children.find {
-					|v| v.element_name == "username" }
-				puts "secret: " + qn.children.find {
-					|v| v.element_name == "password" }
-				puts "phone num: " + qn.children.find {
-					|v| v.element_name == "phone" }
-				next
-			end
+			user_id = ''
+			api_token = ''
+			api_secret = ''
+			phone_num = ''
 
-			for field in xn.children
-				if field.element_name == "field"
-					val = field.children.find { |v|
+			if xn.nil?
+				user_id = qn.children.find {
+					|v| v.element_name == "nick" }
+				api_token = qn.children.find {
+					|v| v.element_name == "username" }
+				api_secret = qn.children.find {
+					|v| v.element_name == "password" }
+				phone_num = qn.children.find {
+					|v| v.element_name == "phone" }
+			else
+				for field in xn.children
+					if field.element_name == "field"
+						val = field.children.find { |v|
 						v.element_name == "value" }
 
-					case field['var']
-					when 'nick'
-						puts "id: " + val.text
-					when 'username'
-						puts "token: " + val.text
-					when 'password'
-						puts "secret: " + val.text
-					when 'phone'
-						puts "phone num: " + val.text
-					when 'FORM_TYPE'
-						puts "FORM_TYPE: " + val.text
-					else
-						# TODO: error
-						puts "weird var: " +field['var']
+						case field['var']
+						when 'nick'
+							user_id = val.text
+						when 'username'
+							api_token = val.text
+						when 'password'
+							api_secret = val.text
+						when 'phone'
+							phone_num = val.text
+						else
+							# TODO: error
+							puts "?: " +field['var']
+						end
 					end
 				end
 			end
 
-			# success (for now)
-			write_to_stream i.reply
+			uri = URI.parse('https://api.catapult.inetwork.com')
+			http = Net::HTTP.new(uri.host, uri.port)
+			http.use_ssl = true
+			request = Net::HTTP::Get.new('/v1/users/' + user_id +
+				'/phoneNumbers/' + phone_num)
+			request.basic_auth api_token, api_secret
+			response = http.request(request)
+
+			puts 'API response: ' + response.to_s + ' with code ' +
+				response.code + ', body "' + response.body + '"'
+
+			if response.code == '200'
+				params = JSON.parse response.body
+				if params['numberState'] == 'enabled'
+					write_to_stream i.reply
+				else
+					# TODO: add text re number disabled
+					write_to_stream error_msg(i.reply, qn,
+						:modify, 'not-acceptable')
+				end
+			elsif response.code == '401'
+				# TODO: add text re bad credentials
+				write_to_stream error_msg(i.reply, qn, :auth,
+					'not-authorized')
+			elsif response.code == '404'
+				# TODO: add text re number not found or disabled
+				write_to_stream error_msg(i.reply, qn, :cancel,
+					'item-not-found')
+			else
+				# TODO: add text re misc error, and mention code
+				write_to_stream error_msg(i.reply, qn, :modify,
+					'not-acceptable')
+			end
 
 		elsif i.type == :get
 			orig = i.reply

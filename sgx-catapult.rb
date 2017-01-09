@@ -146,7 +146,7 @@ module SGXcatapult
 			if response.code == '200'
 				params = JSON.parse response.body
 				if params['numberState'] == 'enabled'
-					bare_jid = i.from.to_s.split('/')[0]
+					bare_jid = i.from.to_s.split('/', 2)[0]
 					cred_key = "catapult_cred-" + bare_jid
 
 					# TODO: pre-validate ARGV[5] is integer

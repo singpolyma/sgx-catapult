@@ -144,6 +144,8 @@ module SGXcatapult
 			n1.content= "Enter the information from your Account " +
 				"page as well as the Phone Number\nin your " +
 				"account you want to use (ie. '+12345678901')" +
+				".\nUser Id is nick, API Token is username, " +
+				"API Secret is password, Phone Number is phone"+
 				".\n\nThe source code for this gateway is at " +
 				"https://github.com/ossguy/sgx-catapult ." +
 				"\nCopyright (C) 2017  Denver Gingerich, " +

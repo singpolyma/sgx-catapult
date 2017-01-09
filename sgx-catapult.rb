@@ -70,13 +70,13 @@ module SGXcatapult
 						v.element_name == "value" }
 
 					case field['var']
-					when 'user_id'
+					when 'nick'
 						puts "id: " + val.text
-					when 'api_token'
+					when 'username'
 						puts "token: " + val.text
-					when 'api_secret'
+					when 'password'
 						puts "secret: " + val.text
-					when 'phone_number'
+					when 'phone'
 						puts "phone num: " + val.text
 					when 'FORM_TYPE'
 						puts "FORM_TYPE: " + val.text
@@ -148,10 +148,10 @@ module SGXcatapult
 				"https://github.com/ossguy/sgx-catapult ." +
 				"\nCopyright (C) 2017  Denver Gingerich, " +
 				"licensed under AGPLv3+."
-			n2 = Nokogiri::XML::Node.new 'user_id',msg.document
-			n3 = Nokogiri::XML::Node.new 'api_token',msg.document
-			n4 = Nokogiri::XML::Node.new 'api_secret',msg.document
-			n5 = Nokogiri::XML::Node.new 'phone_number',msg.document
+			n2 = Nokogiri::XML::Node.new 'nick',msg.document
+			n3 = Nokogiri::XML::Node.new 'username',msg.document
+			n4 = Nokogiri::XML::Node.new 'password',msg.document
+			n5 = Nokogiri::XML::Node.new 'phone',msg.document
 			msg.add_child(n1)
 			msg.add_child(n2)
 			msg.add_child(n3)
@@ -190,7 +190,7 @@ module SGXcatapult
 			f2 = Nokogiri::XML::Node.new 'field',orig.document
 			f2['type'] = 'text-single'
 			f2['label'] = 'User Id'
-			f2['var'] = 'user_id'
+			f2['var'] = 'nick'
 			v2 = Nokogiri::XML::Node.new 'required',orig.document
 			f2.add_child(v2)
 			x.add_child(f2)
@@ -198,7 +198,7 @@ module SGXcatapult
 			f3 = Nokogiri::XML::Node.new 'field',orig.document
 			f3['type'] = 'text-single'
 			f3['label'] = 'API Token'
-			f3['var'] = 'api_token'
+			f3['var'] = 'username'
 			v3 = Nokogiri::XML::Node.new 'required',orig.document
 			f3.add_child(v3)
 			x.add_child(f3)
@@ -206,7 +206,7 @@ module SGXcatapult
 			f4 = Nokogiri::XML::Node.new 'field',orig.document
 			f4['type'] = 'text-private'
 			f4['label'] = 'API Secret'
-			f4['var'] = 'api_secret'
+			f4['var'] = 'password'
 			v4 = Nokogiri::XML::Node.new 'required',orig.document
 			f4.add_child(v4)
 			x.add_child(f4)
@@ -214,7 +214,7 @@ module SGXcatapult
 			f5 = Nokogiri::XML::Node.new 'field',orig.document
 			f5['type'] = 'text-single'
 			f5['label'] = 'Phone Number'
-			f5['var'] = 'phone_number'
+			f5['var'] = 'phone'
 			v5 = Nokogiri::XML::Node.new 'required',orig.document
 			f5.add_child(v5)
 			x.add_child(f5)

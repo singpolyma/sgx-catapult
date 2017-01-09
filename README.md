@@ -1,1 +1,1 @@
-# sgx-catapult
+= sgx-catapult =

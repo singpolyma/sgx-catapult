@@ -50,19 +50,11 @@ module SGXcatapult
 	iq '/iq/ns:query', :ns =>
 		'http://jabber.org/protocol/disco#items' do |i, xpath_result|
 
-		puts "IQ: #{i.inspect}"
-
-		msg = i.reply
-
-		puts "RESPONSE0: #{msg.inspect}"
-		write_to_stream msg
-		puts "SENT"
+		write_to_stream i.reply
 	end
 
 	iq '/iq/ns:query', :ns =>
 		'http://jabber.org/protocol/disco#info' do |i, xpath_result|
-
-		puts "IQ: #{i.inspect}"
 
 		msg = i.reply
 		msg.identities = [{:name =>
@@ -73,9 +65,7 @@ module SGXcatapult
 			"http://jabber.org/protocol/disco#info",
 			"http://jabber.org/protocol/commands",
 			"http://jabber.org/protocol/muc"]
-		puts "RESPONSE1: #{msg.inspect}"
 		write_to_stream msg
-		puts "SENT"
 	end
 
 	iq '/iq/ns:query', :ns => 'jabber:iq:register' do |i, qn|
@@ -120,11 +110,7 @@ module SGXcatapult
 			end
 
 			# success (for now)
-			msg = i.reply
-
-			puts "RESPONSE3: #{msg.inspect}"
-			write_to_stream msg
-			puts "SENT"
+			write_to_stream i.reply
 
 		elsif i.type == :get
 			orig = i.reply

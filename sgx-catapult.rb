@@ -20,11 +20,12 @@
 require 'blather/client/dsl'
 require 'json'
 require 'net/http'
+require 'redis/connection/hiredis'
 require 'uri'
 
-if ARGV.size != 4 then
+if ARGV.size != 6 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
-		"<server_hostname> <server_port>"
+		"<server_hostname> <server_port> <redis_hostname> <redis_port>"
 	exit 0
 end
 
@@ -145,6 +146,40 @@ module SGXcatapult
 			if response.code == '200'
 				params = JSON.parse response.body
 				if params['numberState'] == 'enabled'
+					bare_jid = i.from.to_s.split('/')[0]
+					cred_key = "catapult_cred-" + bare_jid
+
+					# TODO: pre-validate ARGV[5] is integer
+					conn = Hiredis::Connection.new
+					conn.connect(ARGV[4], ARGV[5].to_i)
+
+					conn.write ["EXISTS", cred_key]
+					if conn.read == 1
+						# TODO: add txt re already exist
+						write_to_stream error_msg(
+							i.reply, qn, :cancel,
+							'conflict')
+						next
+					end
+
+					conn.write ["RPUSH",cred_key,user_id]
+					conn.write ["RPUSH",cred_key,api_token]
+					conn.write ["RPUSH",cred_key,api_secret]
+					conn.write ["RPUSH",cred_key,phone_num]
+
+					for n in 1..4 do
+						# TODO: catch/relay RuntimeError
+						result = conn.read
+						if result < 1
+							write_to_stream(
+							error_msg(
+							i.reply, qn, :cancel,
+							'internal-server-error')
+							)
+							next
+						end
+					end
+
 					write_to_stream i.reply
 				else
 					# TODO: add text re number disabled

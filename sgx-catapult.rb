@@ -53,6 +53,40 @@ module SGXcatapult
 		if i.type == :set
 			puts "received set, likely for jabber:iq:register"
 
+			# TODO: resilient error handling; what if no query node?
+
+			qn = i.children.find { |v| v.element_name == "query" }
+			# TODO: add below check - as-written has unmatched end
+	i		#if qn.namespace.href != 'jabber:iq:register'
+			#	# TODO: error
+			#	puts "weird xmlns: " + qn.namespace.href
+			#	next
+			#end
+
+			xn = qn.children.find { |v| v.element_name == "x" }
+			for field in xn.children
+				if field.element_name == "field"
+					val = field.children.find { |v|
+						v.element_name == "value" }
+
+					case field['var']
+					when 'user_id'
+						puts "id: " + val.text
+					when 'api_token'
+						puts "token: " + val.text
+					when 'api_secret'
+						puts "secret: " + val.text
+					when 'phone_number'
+						puts "phone num: " + val.text
+					when 'FORM_TYPE'
+						puts "FORM_TYPE: " + val.text
+					else
+						# TODO: error
+						puts "weird var: " +field['var']
+					end
+				end
+			end
+
 			# success (for now)
 			msg = Blather::Stanza::Iq.new
 			msg.id = i.id

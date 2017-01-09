@@ -47,22 +47,48 @@ module SGXcatapult
 		end
 	end
 
-	iq do |i|
+	iq '/iq/ns:query', :ns =>
+		'http://jabber.org/protocol/disco#items' do |i, xpath_result|
+
+		puts "IQ: #{i.inspect}"
+
+		msg = Blather::Stanza::Iq::DiscoItems.new
+		msg.id = i.id
+		msg.to = i.from
+		msg.type = 'result'
+
+		puts "RESPONSE0: #{msg.inspect}"
+		write_to_stream msg
+		puts "SENT"
+	end
+
+	iq '/iq/ns:query', :ns =>
+		'http://jabber.org/protocol/disco#info' do |i, xpath_result|
+
+		puts "IQ: #{i.inspect}"
+
+		msg = Blather::Stanza::Iq::DiscoInfo.new
+		msg.id = i.id
+		msg.to = i.from
+		msg.type = 'result'
+
+		msg.identities = [{:name =>
+			'Soprani.ca Gateway to XMPP - Catapult',
+			:type => 'sms-ctplt', :category => 'gateway'}]
+		msg.features = ["jabber:iq:register",
+			"jabber:iq:gateway", "jabber:iq:private",
+			"http://jabber.org/protocol/disco#info",
+			"http://jabber.org/protocol/commands",
+			"http://jabber.org/protocol/muc"]
+		puts "RESPONSE1: #{msg.inspect}"
+		write_to_stream msg
+		puts "SENT"
+	end
+
+	iq '/iq/ns:query', :ns => 'jabber:iq:register' do |i, qn|
 		puts "IQ: #{i.inspect}"
 
 		if i.type == :set
-			puts "received set, likely for jabber:iq:register"
-
-			# TODO: resilient error handling; what if no query node?
-
-			qn = i.children.find { |v| v.element_name == "query" }
-			# TODO: add below check - as-written has unmatched end
-	i		#if qn.namespace.href != 'jabber:iq:register'
-			#	# TODO: error
-			#	puts "weird xmlns: " + qn.namespace.href
-			#	next
-			#end
-
 			xn = qn.children.find { |v| v.element_name == "x" }
 
 			if xn.nil?
@@ -110,42 +136,7 @@ module SGXcatapult
 			write_to_stream msg
 			puts "SENT"
 
-			# TODO: implement this (verify/save data, return result)
-			next
-		end
-
-		query_node = i.children.find { |v| v.element_name == "query" }
-		if query_node.namespace.href ==
-			'http://jabber.org/protocol/disco#items'
-
-			msg = Blather::Stanza::Iq::DiscoItems.new
-			msg.id = i.id
-			msg.to = i.from
-			msg.type = 'result'
-
-			puts "RESPONSE0: #{msg.inspect}"
-			write_to_stream msg
-			puts "SENT"
-		elsif query_node.namespace.href ==
-			'http://jabber.org/protocol/disco#info'
-
-			msg = Blather::Stanza::Iq::DiscoInfo.new
-			msg.id = i.id
-			msg.to = i.from
-			msg.type = 'result'
-
-			msg.identities = [{:name =>
-				'Soprani.ca Gateway to XMPP - Catapult',
-				:type => 'sms-ctplt', :category => 'gateway'}]
-			msg.features = ["jabber:iq:register",
-				"jabber:iq:gateway", "jabber:iq:private",
-				"http://jabber.org/protocol/disco#info",
-				"http://jabber.org/protocol/commands",
-				"http://jabber.org/protocol/muc"]
-			puts "RESPONSE1: #{msg.inspect}"
-			write_to_stream msg
-			puts "SENT"
-		elsif query_node.namespace.href == 'jabber:iq:register'
+		elsif i.type == :get
 			orig = Blather::Stanza::Iq.new
 			orig.id = i.id
 			orig.to = i.from

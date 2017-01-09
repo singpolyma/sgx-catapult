@@ -64,6 +64,19 @@ module SGXcatapult
 			#end
 
 			xn = qn.children.find { |v| v.element_name == "x" }
+
+			if xn.nil?
+				puts "id: " + qn.children.find {
+					|v| v.element_name == "nick" }
+				puts "token: " + qn.children.find {
+					|v| v.element_name == "username" }
+				puts "secret: " + qn.children.find {
+					|v| v.element_name == "password" }
+				puts "phone num: " + qn.children.find {
+					|v| v.element_name == "phone" }
+				next
+			end
+
 			for field in xn.children
 				if field.element_name == "field"
 					val = field.children.find { |v|

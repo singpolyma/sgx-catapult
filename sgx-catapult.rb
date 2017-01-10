@@ -132,6 +132,13 @@ module SGXcatapult
 				end
 			end
 
+			if phone_num[0] != '+'
+				# TODO: add text re number not (yet) supported
+				write_to_stream error_msg(i.reply, qn, :modify,
+					'policy-violation')
+				next
+			end
+
 			uri = URI.parse('https://api.catapult.inetwork.com')
 			http = Net::HTTP.new(uri.host, uri.port)
 			http.use_ssl = true
@@ -170,7 +177,7 @@ module SGXcatapult
 					for n in 1..4 do
 						# TODO: catch/relay RuntimeError
 						result = conn.read
-						if result < 1
+						if result != n
 							write_to_stream(
 							error_msg(
 							i.reply, qn, :cancel,

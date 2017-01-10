@@ -153,6 +153,8 @@ module SGXcatapult
 			if response.code == '200'
 				params = JSON.parse response.body
 				if params['numberState'] == 'enabled'
+					num_key = "catapult_num-" + phone_num
+
 					bare_jid = i.from.to_s.split('/', 2)[0]
 					cred_key = "catapult_cred-" + bare_jid
 
@@ -160,12 +162,31 @@ module SGXcatapult
 					conn = Hiredis::Connection.new
 					conn.connect(ARGV[4], ARGV[5].to_i)
 
+					conn.write ["EXISTS", num_key]
+					if conn.read == 1
+						# TODO: add txt re num exists
+						write_to_stream error_msg(
+							i.reply, qn, :cancel,
+							'conflict')
+						next
+					end
+
 					conn.write ["EXISTS", cred_key]
 					if conn.read == 1
 						# TODO: add txt re already exist
 						write_to_stream error_msg(
 							i.reply, qn, :cancel,
 							'conflict')
+						next
+					end
+
+					conn.write ["RPUSH",num_key,bare_jid]
+					if conn.read != 1
+						# TODO: catch/relay RuntimeError
+						# TODO: add txt re push failure
+						write_to_stream error_msg(
+							i.reply, qn, :cancel,
+							'internal-server-error')
 						next
 					end
 

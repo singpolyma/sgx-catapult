@@ -23,9 +23,10 @@ require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
 
-if ARGV.size != 6 then
+if ARGV.size != 7 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
-		"<server_hostname> <server_port> <redis_hostname> <redis_port>"
+		"<server_hostname> <server_port> " +
+		"<redis_hostname> <redis_port> <delivery_receipt_url>"
 	exit 0
 end
 
@@ -56,6 +57,63 @@ module SGXcatapult
 	setup ARGV[0], ARGV[1], ARGV[2], ARGV[3]
 
 	message :chat?, :body do |m|
+		num_dest = m.to.to_s.split('@', 2)[0]
+
+		if num_dest[0] != '+'
+			# TODO: add text re number not (yet) supported/implmnted
+			write_to_stream error_msg(m.reply, m.body, :modify,
+				'policy-violation')
+			next
+		end
+
+		bare_jid = m.from.to_s.split('/', 2)[0]
+		cred_key = "catapult_cred-" + bare_jid
+
+		conn = Hiredis::Connection.new
+		conn.connect(ARGV[4], ARGV[5].to_i)
+
+		conn.write ["EXISTS", cred_key]
+		if conn.read == 0
+			conn.disconnect
+
+			# TODO: add text re credentials not being registered
+			write_to_stream error_msg(m.reply, m.body, :auth,
+				'registration-required')
+			next
+		end
+
+		conn.write ["LRANGE", cred_key, 0, 3]
+		creds = conn.read
+		conn.disconnect
+
+		uri = URI.parse('https://api.catapult.inetwork.com')
+		http = Net::HTTP.new(uri.host, uri.port)
+		http.use_ssl = true
+		request = Net::HTTP::Post.new('/v1/users/' + creds[0] +
+			'/messages')
+		request.basic_auth creds[1], creds[2]
+		request.add_field('Content-Type', 'application/json')
+		request.body = JSON.dump({
+			'from'			=> creds[3],
+			'to'			=> num_dest,
+			'text'			=> m.body,
+			'tag'			=> m.id, # TODO: message has it?
+			'receiptRequested'	=> 'all',
+			'callbackUrl'		=> ARGV[6]
+		})
+		response = http.request(request)
+
+		puts 'API response to send: ' + response.to_s + ' with code ' +
+			response.code + ', body "' + response.body + '"'
+
+		if response.code != '201'
+			# TODO: add text re unexpected code; mention code number
+			write_to_stream error_msg(m.reply, m.body, :cancel,
+				'internal-server-error')
+			next
+		end
+
+		# TODO: don't echo message; leave in until we rcv msgs properly
 		begin
 			puts "#{m.from.to_s} -> #{m.to.to_s} #{m.body}"
 			msg = Blather::Stanza::Message.new(m.from, 'thx for "' +

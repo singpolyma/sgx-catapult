@@ -164,6 +164,8 @@ module SGXcatapult
 
 					conn.write ["EXISTS", num_key]
 					if conn.read == 1
+						conn.disconnect
+
 						# TODO: add txt re num exists
 						write_to_stream error_msg(
 							i.reply, qn, :cancel,
@@ -173,6 +175,8 @@ module SGXcatapult
 
 					conn.write ["EXISTS", cred_key]
 					if conn.read == 1
+						conn.disconnect
+
 						# TODO: add txt re already exist
 						write_to_stream error_msg(
 							i.reply, qn, :cancel,
@@ -182,6 +186,8 @@ module SGXcatapult
 
 					conn.write ["RPUSH",num_key,bare_jid]
 					if conn.read != 1
+						conn.disconnect
+
 						# TODO: catch/relay RuntimeError
 						# TODO: add txt re push failure
 						write_to_stream error_msg(
@@ -199,6 +205,8 @@ module SGXcatapult
 						# TODO: catch/relay RuntimeError
 						result = conn.read
 						if result != n
+							conn.disconnect
+
 							write_to_stream(
 							error_msg(
 							i.reply, qn, :cancel,
@@ -207,6 +215,7 @@ module SGXcatapult
 							next
 						end
 					end
+					conn.disconnect
 
 					write_to_stream i.reply
 				else

@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 #
 # Copyright (C) 2017  Denver Gingerich <denver@ossguy.com>
+# Copyright (C) 2017  Stephen Paul Weber <singpolyma@singpolyma.net>
 #
 # This file is part of sgx-catapult.
 #
@@ -22,6 +23,7 @@ require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
+
 require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
@@ -29,8 +31,8 @@ require 'log4r'
 if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
 		"<server_hostname> <server_port> " +
-		"<http_port> " +
-		"<redis_hostname> <redis_port> <delivery_receipt_url>"
+		"<redis_hostname> <redis_port> <delivery_receipt_url> " +
+		"<http_listen_port>"
 	exit 0
 end
 
@@ -41,6 +43,7 @@ module SGXcatapult
 		client.run
 	end
 
+	# so classes outside this module can write messages, too
 	def self.write(stanza)
 		client.write(stanza)
 	end
@@ -78,7 +81,7 @@ module SGXcatapult
 		cred_key = "catapult_cred-" + bare_jid
 
 		conn = Hiredis::Connection.new
-		conn.connect(ARGV[5], ARGV[6].to_i)
+		conn.connect(ARGV[4], ARGV[5].to_i)
 
 		conn.write ["EXISTS", cred_key]
 		if conn.read == 0
@@ -385,7 +388,7 @@ end
 EM.run do
 	SGXcatapult.run
 
-	server = Goliath::Server.new('127.0.0.1', ARGV[4].to_i)
+	server = Goliath::Server.new('127.0.0.1', ARGV[7].to_i)
 	server.api = WebhookHandler.new
 	server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
 	server.logger = Log4r::Logger.new('goliath')

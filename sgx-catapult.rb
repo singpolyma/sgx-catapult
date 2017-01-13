@@ -378,7 +378,52 @@ end
 
 class WebhookHandler < Goliath::API
 	def response(env)
-		msg = Blather::Stanza::Message.new('test@localhost', 'hi')
+		puts 'ENV: ' + env.to_s
+		body = Rack::Request.new(env).body.read
+		puts 'BODY: ' + body
+		params = JSON.parse body
+
+		users_num = ''
+		others_num = ''
+		if params['direction'] == 'in'
+			users_num = params['to']
+			others_num = params['from']
+		elsif params['direction'] == 'out'
+			users_num = params['from']
+			others_num = params['to']
+		else
+			# TODO: exception or similar
+			puts "big problem: '" + params['direction'] + "'"
+			return [200, {}, "OK"]
+		end
+
+		num_key = "catapult_num-" + users_num
+
+		# TODO: validate that others_num starts with '+' or is shortcode
+
+		conn = Hiredis::Connection.new
+		conn.connect(ARGV[4], ARGV[5].to_i)
+
+		conn.write ["EXISTS", num_key]
+		if conn.read == 0
+			conn.disconnect
+
+			puts "num_key (#{num_key}) DNE; Catapult misconfigured?"
+
+			# TODO: likely not appropriate; give error to Catapult?
+			# TODO: add text re credentials not being registered
+			#write_to_stream error_msg(m.reply, m.body, :auth,
+			#	'registration-required')
+			return [200, {}, "OK"]
+		end
+
+		conn.write ["LRANGE", num_key, 0, 0]
+		bare_jid = conn.read[0]
+		conn.disconnect
+
+		# TODO: actually send the message and/or deliver receipt ok/fail
+		msg = Blather::Stanza::Message.new(bare_jid, 'hi')
+		msg.from = others_num + '@' + ARGV[0]
 		SGXcatapult.write(msg)
 
 		[200, {}, "OK"]
@@ -388,7 +433,7 @@ end
 EM.run do
 	SGXcatapult.run
 
-	server = Goliath::Server.new('127.0.0.1', ARGV[7].to_i)
+	server = Goliath::Server.new('0.0.0.0', ARGV[7].to_i)
 	server.api = WebhookHandler.new
 	server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
 	server.logger = Log4r::Logger.new('goliath')

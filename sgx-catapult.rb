@@ -421,8 +421,30 @@ class WebhookHandler < Goliath::API
 		bare_jid = conn.read[0]
 		conn.disconnect
 
-		# TODO: actually send the message and/or deliver receipt ok/fail
-		msg = Blather::Stanza::Message.new(bare_jid, 'hi')
+		msg = ''
+		case params['direction']
+		when 'in'
+			text = ''
+			case params['eventType']
+			when 'sms'
+				text = params['text']
+			when 'mms'
+				text = "MMS (pic not implemented) with text: " +
+					params['text']
+			else
+				text = "unknown type (#{params['eventType']})" +
+					" with text: " + params['text']
+
+				# TODO log/notify of this properly
+				puts text
+			end
+
+			msg = Blather::Stanza::Message.new(bare_jid, text)
+		else # per prior switch, this is:  params['direction'] == 'out'
+			# TODO: actually send delivery receipt
+			msg = Blather::Stanza::Message.new(bare_jid, '<rcpt>')
+		end
+
 		msg.from = others_num + '@' + ARGV[0]
 		SGXcatapult.write(msg)
 

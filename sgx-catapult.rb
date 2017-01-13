@@ -22,10 +22,14 @@ require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
+require 'goliath/api'
+require 'goliath/server'
+require 'log4r'
 
-if ARGV.size != 7 then
+if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
 		"<server_hostname> <server_port> " +
+		"<http_port> " +
 		"<redis_hostname> <redis_port> <delivery_receipt_url>"
 	exit 0
 end
@@ -35,6 +39,10 @@ module SGXcatapult
 
 	def self.run
 		client.run
+	end
+
+	def self.write(stanza)
+		client.write(stanza)
 	end
 
 	def self.error_msg(orig, query_node, type, name, text = nil)
@@ -70,7 +78,7 @@ module SGXcatapult
 		cred_key = "catapult_cred-" + bare_jid
 
 		conn = Hiredis::Connection.new
-		conn.connect(ARGV[4], ARGV[5].to_i)
+		conn.connect(ARGV[5], ARGV[6].to_i)
 
 		conn.write ["EXISTS", cred_key]
 		if conn.read == 0
@@ -365,6 +373,23 @@ end
 	}
 end
 
+class WebhookHandler < Goliath::API
+	def response(env)
+		msg = Blather::Stanza::Message.new('test@localhost', 'hi')
+		SGXcatapult.write(msg)
+
+		[200, {}, "OK"]
+	end
+end
+
 EM.run do
 	SGXcatapult.run
+
+	server = Goliath::Server.new('127.0.0.1', ARGV[4].to_i)
+	server.api = WebhookHandler.new
+	server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
+	server.logger = Log4r::Logger.new('goliath')
+	server.logger.add(Log4r::StdoutOutputter.new('console'))
+	server.logger.level = Log4r::INFO
+	server.start
 end

@@ -49,8 +49,10 @@ module SGXcatapult
 	end
 
 	def self.error_msg(orig, query_node, type, name, text = nil)
-		orig.add_child(query_node)
-		orig.type = :error
+		if not query_node.nil?
+			orig.add_child(query_node)
+			orig.type = :error
+		end
 
 		error = Nokogiri::XML::Node.new 'error', orig.document
 		error['type'] = type
@@ -137,6 +139,44 @@ module SGXcatapult
 		end
 	end
 
+	def self.user_cap_identities()
+		[{:category => 'client', :type => 'sms'}]
+	end
+
+	def self.user_cap_features()
+		# TODO: add more features
+		["urn:xmpp:receipts"]
+	end
+
+	presence :subscribe? do |p|
+		puts "PRESENCE1: #{p.inspect}"
+
+		msg = Blather::Stanza::Presence.new
+		msg.to = p.from
+		msg.from = p.to
+		msg.type = :subscribed
+
+		puts "RESPONSE5: #{msg.inspect}"
+		write_to_stream msg
+	end
+
+	presence :probe? do |p|
+		puts 'PRESENCE2: ' + p.inspect
+
+		caps = Blather::Stanza::Capabilities.new
+		# TODO: user a better node URI (?)
+		caps.node = 'http://catapult.sgx.soprani.ca/'
+		caps.identities = user_cap_identities()
+		caps.features = user_cap_features()
+
+		msg = caps.c
+		msg.to = p.from
+		msg.from = p.to.to_s + '/sgx'
+
+		puts 'RESPONSE6: ' + msg.inspect
+		write_to_stream msg
+	end
+
 	iq '/iq/ns:query', :ns =>
 		'http://jabber.org/protocol/disco#items' do |i, xpath_result|
 
@@ -145,6 +185,19 @@ module SGXcatapult
 
 	iq '/iq/ns:query', :ns =>
 		'http://jabber.org/protocol/disco#info' do |i, xpath_result|
+
+		if i.to.to_s.include? '@'
+			# TODO: confirm the node URL is expected using below
+			#puts "XR[node]: #{xpath_result[0]['node']}"
+
+			msg = i.reply
+			msg.identities = user_cap_identities()
+			msg.features = user_cap_features()
+
+			puts 'RESPONSE7: ' + msg.inspect
+			write_to_stream msg
+			next
+		end
 
 		msg = i.reply
 		msg.identities = [{:name =>
@@ -376,6 +429,14 @@ end
 	}
 end
 
+class ReceiptMessage < Blather::Stanza
+	def self.new(to = nil)
+		node = super :message
+		node.to = to
+		node
+	end
+end
+
 class WebhookHandler < Goliath::API
 	def response(env)
 		puts 'ENV: ' + env.to_s
@@ -441,8 +502,34 @@ class WebhookHandler < Goliath::API
 
 			msg = Blather::Stanza::Message.new(bare_jid, text)
 		else # per prior switch, this is:  params['direction'] == 'out'
-			# TODO: actually send delivery receipt
-			msg = Blather::Stanza::Message.new(bare_jid, '<rcpt>')
+			msg = ReceiptMessage.new(bare_jid)
+			msg['id'] = params['tag']
+
+			case params['deliveryState']
+			when 'not-delivered'
+				# TODO: add text re deliveryDescription reason
+				msg = SGXcatapult.error_msg(msg, nil, :cancel,
+					'service-unavailable')
+				return [200, {}, "OK"]
+			when 'delivered'
+				# TODO: send only when requested per XEP-0184
+				rcvd = Nokogiri::XML::Node.new 'received',
+					msg.document
+				rcvd['xmlns'] = 'urn:xmpp:receipts'
+				rcvd['id'] = params['tag']
+				msg.add_child(rcvd)
+			when 'waiting'
+				# can't really do anything with it; nice to know
+				puts "message with id #{params['id']} waiting"
+				return [200, {}, "OK"]
+			else
+				# TODO: notify somehow of unknown state receivd?
+				puts "message with id #{params['id']} has " +
+					"other state #{params['deliveryState']}"
+				return [200, {}, "OK"]
+			end
+
+			puts "RESPONSE4: #{msg.inspect}"
 		end
 
 		msg.from = others_num + '@' + ARGV[0]

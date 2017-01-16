@@ -74,8 +74,8 @@ module SGXcatapult
 
 		if num_dest[0] != '+'
 			# TODO: add text re number not (yet) supported/implmnted
-			write_to_stream error_msg(m.reply, m.body, :modify,
-				'policy-violation')
+			write_to_stream error_msg(m.reply, m.body, :cancel,
+				'item-not-found')
 			next
 		end
 
@@ -244,8 +244,8 @@ module SGXcatapult
 
 			if phone_num[0] != '+'
 				# TODO: add text re number not (yet) supported
-				write_to_stream error_msg(i.reply, qn, :modify,
-					'policy-violation')
+				write_to_stream error_msg(i.reply, qn, :cancel,
+					'item-not-found')
 				next
 			end
 

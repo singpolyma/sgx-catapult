@@ -125,18 +125,6 @@ module SGXcatapult
 				'internal-server-error')
 			next
 		end
-
-		# TODO: don't echo message; leave in until we rcv msgs properly
-		begin
-			puts "#{m.from.to_s} -> #{m.to.to_s} #{m.body}"
-			msg = Blather::Stanza::Message.new(m.from, 'thx for "' +
-				m.body + '"')
-			msg.from = m.to
-			write_to_stream msg
-		rescue => e
-			# TODO: do something better with this info
-			say m.from, e.inspect
-		end
 	end
 
 	def self.user_cap_identities()

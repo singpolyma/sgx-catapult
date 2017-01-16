@@ -96,18 +96,18 @@ module SGXcatapult
 		end
 
 		conn.write ["LRANGE", cred_key, 0, 3]
-		creds = conn.read
+		user_id, api_token, api_secret, users_num = conn.read
 		conn.disconnect
 
 		uri = URI.parse('https://api.catapult.inetwork.com')
 		http = Net::HTTP.new(uri.host, uri.port)
 		http.use_ssl = true
-		request = Net::HTTP::Post.new('/v1/users/' + creds[0] +
+		request = Net::HTTP::Post.new('/v1/users/' + user_id +
 			'/messages')
-		request.basic_auth creds[1], creds[2]
+		request.basic_auth api_token, api_secret
 		request.add_field('Content-Type', 'application/json')
 		request.body = JSON.dump({
-			'from'			=> creds[3],
+			'from'			=> users_num,
 			'to'			=> num_dest,
 			'text'			=> m.body,
 			'tag'			=> m.id, # TODO: message has it?

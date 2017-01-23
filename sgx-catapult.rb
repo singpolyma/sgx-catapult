@@ -23,6 +23,7 @@ require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
+require 'uuid'
 
 require 'goliath/api'
 require 'goliath/server'
@@ -38,6 +39,9 @@ end
 
 module SGXcatapult
 	extend Blather::DSL
+
+	@jingle_sids = Hash.new
+	@uuid_gen = UUID.new
 
 	def self.run
 		client.run
@@ -132,8 +136,17 @@ module SGXcatapult
 	end
 
 	def self.user_cap_features()
-		# TODO: add more features
-		["urn:xmpp:receipts"]
+	[
+		"urn:xmpp:receipts",
+		"urn:xmpp:jingle:1", "urn:xmpp:jingle:transports:ibb:1",
+
+		# TODO: eventually add more efficient file transfer mechanisms
+		#"urn:xmpp:jingle:transports:s5b:1",
+
+		# TODO: MUST add all relevant/reasonable vers of file-transfer
+		#"urn:xmpp:jingle:apps:file-transfer:4"
+		"urn:xmpp:jingle:apps:file-transfer:3"
+	]
 	end
 
 	presence :subscribe? do |p|
@@ -162,6 +175,134 @@ module SGXcatapult
 		msg.from = p.to.to_s + '/sgx'
 
 		puts 'RESPONSE6: ' + msg.inspect
+		write_to_stream msg
+	end
+
+	iq '/iq/ns:jingle', :ns => 'urn:xmpp:jingle:1' do |i, jn|
+		puts "IQj: #{i.inspect}"
+
+		if jn[0]['action'] == 'transport-accept'
+			puts "REPLY0: #{i.reply.inspect}"
+			write_to_stream i.reply
+			next
+		elsif jn[0]['action'] == 'session-terminate'
+			# TODO: unexpected (usually we do this; handle?)
+			puts "TERMINATED"
+			next
+		elsif jn[0]['action'] == 'transport-info'
+			# TODO: unexpected, but should handle in a nice way
+			puts "FAIL!!!"
+			next
+		elsif i.type == :error
+			# TODO: do something, maybe terminating the connection
+			puts 'ERROR!!!'
+			next
+		end
+
+		# TODO: should probably confirm we got session-initiate here
+
+		write_to_stream i.reply
+		puts "RESPONSE8: #{i.reply.inspect}"
+
+		msg = Blather::Stanza::Iq.new :set
+		msg.to = i.from
+		msg.from = i.to
+
+		cn = jn.children.find { |v| v.element_name == "content" }
+		puts 'CN-name: ' + cn['name']
+		puts 'JN-sid: ' + jn[0]['sid']
+
+		ibb_found = false
+		last_sid = ''
+		for child in cn.children
+			if child.element_name == 'transport'
+				puts 'TPORT: ' + child.namespace.href
+				last_sid = child['sid']
+				if 'urn:xmpp:jingle:transports:ibb:1' ==
+					child.namespace.href
+
+					ibb_found = true
+					break
+				end
+			end
+		end
+
+		j = Nokogiri::XML::Node.new 'jingle',msg.document
+		j['xmlns'] = 'urn:xmpp:jingle:1'
+		j['sid'] = jn[0]['sid']
+		msg.add_child(j)
+
+		content = Nokogiri::XML::Node.new 'content',msg.document
+		content['name'] = cn['name']
+		content['creator'] = 'initiator'
+		j.add_child(content)
+
+		transport = Nokogiri::XML::Node.new 'transport',msg.document
+		# TODO: make block-size more variable and/or dependent on sender
+		transport['block-size'] = '4096'
+		transport['xmlns'] = 'urn:xmpp:jingle:transports:ibb:1'
+		if ibb_found
+			transport['sid'] = last_sid
+			j['action'] = 'session-accept'
+			j['responder'] = i.from
+
+			dsc = Nokogiri::XML::Node.new 'description',msg.document
+			dsc['xmlns'] = 'urn:xmpp:jingle:apps:file-transfer:3'
+			content.add_child(dsc)
+		else
+			# for Conversations - it tries s5b even if caps ibb-only
+			transport['sid'] = @uuid_gen.generate
+			j['action'] = 'transport-replace'
+			j['initiator'] = i.from
+		end
+		content.add_child(transport)
+
+		@jingle_sids[transport['sid']] = jn[0]['sid']
+
+		puts "RESPONSE9: #{msg.inspect}"
+		write_to_stream msg
+	end
+
+	iq '/iq/ns:open', :ns =>
+		'http://jabber.org/protocol/ibb' do |i, xpath_result|
+
+		puts "IQo: #{i.inspect}"
+		write_to_stream i.reply
+	end
+
+	iq '/iq/ns:data', :ns =>
+		'http://jabber.org/protocol/ibb' do |i, dn|
+
+		# TODO: decode and save partial data so can upload it when done
+		puts "IQd: #{i.inspect}"
+		write_to_stream i.reply
+	end
+
+	iq '/iq/ns:close', :ns =>
+		'http://jabber.org/protocol/ibb' do |i, cn|
+
+		puts "IQc: #{i.inspect}"
+		write_to_stream i.reply
+
+		# TODO: upload cached data to server (do before success reply)
+
+		# received the complete file so now close the stream
+		msg = Blather::Stanza::Iq.new :set
+		msg.to = i.from
+		msg.from = i.to
+
+		j = Nokogiri::XML::Node.new 'jingle',msg.document
+		j['xmlns'] = 'urn:xmpp:jingle:1'
+		j['action'] = 'session-terminate'
+		j['sid'] = @jingle_sids[cn[0]['sid']]
+		msg.add_child(j)
+
+		r = Nokogiri::XML::Node.new 'reason',msg.document
+		s = Nokogiri::XML::Node.new 'success',msg.document
+		r.add_child(s)
+		j.add_child(r)
+
+		puts 'RESPONSE1: ' + msg.inspect
 		write_to_stream msg
 	end
 

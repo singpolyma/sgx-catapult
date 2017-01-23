@@ -9,3 +9,5 @@ gem 'redis', '>= 3.2.0'
 
 gem 'goliath'
 gem 'log4r'
+
+gem 'uuid'

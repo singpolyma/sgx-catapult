@@ -634,7 +634,7 @@ class WebhookHandler < Goliath::API
 			msg = Blather::Stanza::Message.new(bare_jid, text)
 		else # per prior switch, this is:  params['direction'] == 'out'
 			msg = ReceiptMessage.new(bare_jid)
-			msg['id'] = params['tag']
+			msg['id'] = @uuid_gen.generate
 
 			case params['deliveryState']
 			when 'not-delivered'

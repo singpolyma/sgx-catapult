@@ -29,6 +29,8 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.010"
+
 if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
 		"<server_hostname> <server_port> " +

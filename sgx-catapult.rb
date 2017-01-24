@@ -29,7 +29,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.011"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.012"
 
 if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -654,11 +654,11 @@ class WebhookHandler < Goliath::API
 				msg.add_child(rcvd)
 			when 'waiting'
 				# can't really do anything with it; nice to know
-				puts "message with id #{params['id']} waiting"
+				puts "message with id #{params['tag']} waiting"
 				return [200, {}, "OK"]
 			else
 				# TODO: notify somehow of unknown state receivd?
-				puts "message with id #{params['id']} has " +
+				puts "message with id #{params['tag']} has " +
 					"other state #{params['deliveryState']}"
 				return [200, {}, "OK"]
 			end

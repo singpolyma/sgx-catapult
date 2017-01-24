@@ -22,6 +22,7 @@ require 'blather/client/dsl'
 require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
+require 'time'
 require 'uri'
 require 'uuid'
 
@@ -29,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.012"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.013"
 
 if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -43,6 +44,8 @@ module SGXcatapult
 	extend Blather::DSL
 
 	@jingle_sids = Hash.new
+	@jingle_fnames = Hash.new
+	@partial_data = Hash.new
 	@uuid_gen = UUID.new
 
 	def self.run
@@ -261,22 +264,31 @@ module SGXcatapult
 
 		@jingle_sids[transport['sid']] = jn[0]['sid']
 
+		# TODO: save <date> as well? Gajim sends, Conversations does not
+		# TODO: save/validate <size> with eventual full received length
+		fname = cn.children.find { |v| v.element_name == "description"
+			}.children.find { |w| w.element_name == "offer"
+			}.children.find { |x| x.element_name == "file"
+			}.children.find { |y| y.element_name == "name" }
+		@jingle_fnames[transport['sid']] = fname.text
+
 		puts "RESPONSE9: #{msg.inspect}"
 		write_to_stream msg
 	end
 
 	iq '/iq/ns:open', :ns =>
-		'http://jabber.org/protocol/ibb' do |i, xpath_result|
+		'http://jabber.org/protocol/ibb' do |i, on|
 
 		puts "IQo: #{i.inspect}"
+
+		@partial_data[on[0]['sid']] = ''
 		write_to_stream i.reply
 	end
 
 	iq '/iq/ns:data', :ns =>
 		'http://jabber.org/protocol/ibb' do |i, dn|
 
-		# TODO: decode and save partial data so can upload it when done
-		puts "IQd: #{i.inspect}"
+		@partial_data[dn[0]['sid']] += Base64.decode64(dn[0].text)
 		write_to_stream i.reply
 	end
 
@@ -286,7 +298,95 @@ module SGXcatapult
 		puts "IQc: #{i.inspect}"
 		write_to_stream i.reply
 
-		# TODO: upload cached data to server (do before success reply)
+		# TODO: refactor below so that "message :chat?" uses same code
+		num_dest = i.to.to_s.split('@', 2)[0]
+
+		if num_dest[0] != '+'
+			# TODO: add text re number not (yet) supported/implmnted
+			write_to_stream error_msg(i.reply, nil, :cancel,
+				'item-not-found')
+			next
+		end
+
+		bare_jid = i.from.to_s.split('/', 2)[0]
+		cred_key = "catapult_cred-" + bare_jid
+
+		# TODO: connect at start of program instead
+		conn = Hiredis::Connection.new
+		conn.connect(ARGV[4], ARGV[5].to_i)
+
+		conn.write ["EXISTS", cred_key]
+		if conn.read == 0
+			conn.disconnect
+
+			# TODO: add text re credentials not being registered
+			write_to_stream error_msg(i.reply, nil, :auth,
+				'registration-required')
+			next
+		end
+
+		conn.write ["LRANGE", cred_key, 0, 3]
+		user_id, api_token, api_secret, users_num = conn.read
+		conn.disconnect
+
+		# upload cached data to server (before success reply)
+		media_name = Time.now.utc.iso8601 + '_' + @uuid_gen.generate +
+			'_' + @jingle_fnames[cn[0]['sid']]
+		puts 'name to save: ' + media_name
+
+		uri = URI.parse('https://api.catapult.inetwork.com')
+		http = Net::HTTP.new(uri.host, uri.port)
+		http.use_ssl = true
+		request = Net::HTTP::Put.new('/v1/users/' + user_id +
+			'/media/' + media_name)
+		request.basic_auth api_token, api_secret
+		request.body = @partial_data[cn[0]['sid']]
+		response = http.request(request)
+
+		puts 'eAPI response to send: ' + response.to_s + ' with code ' +
+			response.code + ', body "' + response.body + '"'
+
+		if response.code != '200'
+			# TODO: add text re unexpected code; mention code number
+			write_to_stream error_msg(i.reply, nil, :cancel,
+				'internal-server-error')
+			next
+		end
+
+		uri = URI.parse('https://api.catapult.inetwork.com')
+		http = Net::HTTP.new(uri.host, uri.port)
+		http.use_ssl = true
+		request = Net::HTTP::Post.new('/v1/users/' + user_id +
+			'/messages')
+		request.basic_auth api_token, api_secret
+		request.add_field('Content-Type', 'application/json')
+		request.body = JSON.dump({
+			'from'			=> users_num,
+			'to'			=> num_dest,
+			'text'			=> '',
+			'media'			=> [
+				'https://api.catapult.inetwork.com/v1/users/' +
+				user_id + '/media/' + media_name],
+			'tag'			=> i.id  # TODO: message has it?
+			# TODO: add back when Bandwidth AP supports it (?); now:
+			#  "The ''messages'' resource property
+			#  ''receiptRequested'' is not supported for MMS"
+			#'receiptRequested'	=> 'all',
+			#'callbackUrl'		=> ARGV[6]
+		})
+		response = http.request(request)
+
+		puts 'mAPI response to send: ' + response.to_s + ' with code ' +
+			response.code + ', body "' + response.body + '"'
+
+		if response.code != '201'
+			# TODO: add text re unexpected code; mention code number
+			write_to_stream error_msg(i.reply, nil, :cancel,
+				'internal-server-error')
+			next
+		end
+
+		@partial_data[cn[0]['sid']] = ''
 
 		# received the complete file so now close the stream
 		msg = Blather::Stanza::Iq.new :set

@@ -29,7 +29,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.010"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.011"
 
 if ARGV.size != 8 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -634,7 +634,10 @@ class WebhookHandler < Goliath::API
 			msg = Blather::Stanza::Message.new(bare_jid, text)
 		else # per prior switch, this is:  params['direction'] == 'out'
 			msg = ReceiptMessage.new(bare_jid)
-			msg['id'] = @uuid_gen.generate
+
+			# TODO: put in member/instance variable
+			uuid_gen = UUID.new
+			msg['id'] = uuid_gen.generate
 
 			case params['deliveryState']
 			when 'not-delivered'

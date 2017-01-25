@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.014"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.015"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -82,10 +82,19 @@ module SGXcatapult
 		num_dest = m.to.to_s.split('@', 2)[0]
 
 		if num_dest[0] != '+'
-			# TODO: add text re number not (yet) supported/implmnted
-			write_to_stream error_msg(m.reply, m.body, :cancel,
-				'item-not-found')
-			next
+			# check to see if a valid shortcode context is specified
+			num_and_context = num_dest.split(';', 2)
+			if num_and_context[1] and num_and_context[1] ==
+				'phone-context=ca-us.phone-context.soprani.ca'
+
+				# TODO: check if num_dest is fully numeric
+				num_dest = num_and_context[0]
+			else
+				# TODO: text re num not (yet) supportd/implmentd
+				write_to_stream error_msg(m.reply, m.body,
+					:cancel, 'item-not-found')
+				next
+			end
 		end
 
 		bare_jid = m.from.to_s.split('/', 2)[0]
@@ -302,10 +311,19 @@ module SGXcatapult
 		num_dest = i.to.to_s.split('@', 2)[0]
 
 		if num_dest[0] != '+'
-			# TODO: add text re number not (yet) supported/implmnted
-			write_to_stream error_msg(i.reply, nil, :cancel,
-				'item-not-found')
-			next
+			# check to see if a valid shortcode context is specified
+			num_and_context = num_dest.split(';', 2)
+			if num_and_context[1] and num_and_context[1] ==
+				'phone-context=ca-us.phone-context.soprani.ca'
+
+				# TODO: check if num_dest is fully numeric
+				num_dest = num_and_context[0]
+			else
+				# TODO: text re num not (yet) supportd/implmentd
+				write_to_stream error_msg(i.reply, nil,
+					:cancel, 'item-not-found')
+				next
+			end
 		end
 
 		bare_jid = i.from.to_s.split('/', 2)[0]
@@ -720,7 +738,11 @@ class WebhookHandler < Goliath::API
 
 		num_key = "catapult_num-" + users_num
 
-		# TODO: validate that others_num starts with '+' or is shortcode
+		if others_num[0] != '+'
+			# TODO: check that others_num actually a shortcode first
+			others_num = others_num +
+				';phone-context=ca-us.phone-context.soprani.ca'
+		end
 
 		conn = Hiredis::Connection.new
 		conn.connect(ARGV[4], ARGV[5].to_i)

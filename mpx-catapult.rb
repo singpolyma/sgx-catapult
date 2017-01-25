@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with sgx-catapult.  If not, see <http://www.gnu.org/licenses/>.
 
-puts "Soprani.ca/MMS Proxy for XMPP - Catapult        v0.001"
+puts "Soprani.ca/MMS Proxy for XMPP - Catapult        v0.002"
 
 require 'goliath'
 require 'net/http'
@@ -66,8 +66,18 @@ class WebhookHandler < Goliath::API
 		uri = URI.parse('https://api.catapult.inetwork.com')
 		http = Net::HTTP.new(uri.host, uri.port)
 		http.use_ssl = true
-		request = Net::HTTP::Get.new('/v1/users/' + user_id +
-			'/media/' + env['REQUEST_PATH'].split('/', 3)[2])
+		request = ''
+		if env['REQUEST_METHOD'] == 'GET'
+			request = Net::HTTP::Get.new('/v1/users/' + user_id +
+				'/media/' +env['REQUEST_PATH'].split('/', 3)[2])
+		elsif env['REQUEST_METHOD'] == 'HEAD'
+			request = Net::HTTP::Head.new('/v1/users/' + user_id +
+				'/media/' +env['REQUEST_PATH'].split('/', 3)[2])
+		else
+			puts 'ERROR: received non-HEAD/-GET request'
+			return [500, {'Content-Type' => 'text/plain'},
+				e.inspect]
+		end
 		request.basic_auth api_token, api_secret
 		response = http.request(request)
 

@@ -30,13 +30,13 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.013"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.014"
 
-if ARGV.size != 8 then
+if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
 		"<server_hostname> <server_port> " +
 		"<redis_hostname> <redis_port> <delivery_receipt_url> " +
-		"<http_listen_port>"
+		"<http_listen_port> <mms_proxy_prefix_url>"
 	exit 0
 end
 
@@ -669,6 +669,35 @@ class ReceiptMessage < Blather::Stanza
 end
 
 class WebhookHandler < Goliath::API
+	def send_media(from, to, media_url)
+		# we assume media_url is of the form (always the case so far):
+		#  https://api.catapult.inetwork.com/v1/users/[uid]/media/[file]
+
+		# the caller must guarantee that 'to' is a bare JID
+		proxy_url = ARGV[8] + to + '/' + media_url.split('/', 8)[7]
+
+		puts 'ORIG_URL: ' + media_url
+		puts 'PROX_URL: ' + proxy_url
+
+		# put URL in the body (so Conversations will still see it)...
+		msg = Blather::Stanza::Message.new(to, proxy_url)
+		msg.from = from
+
+		# ...but also provide URL in XEP-0066 (OOB) fashion
+		# TODO: confirm client supports OOB or don't send this
+		x = Nokogiri::XML::Node.new 'x', msg.document
+		x['xmlns'] = 'jabber:x:oob'
+
+		urln = Nokogiri::XML::Node.new 'url', msg.document
+		urlc = Nokogiri::XML::Text.new proxy_url, msg.document
+
+		urln.add_child(urlc)
+		x.add_child(urln)
+		msg.add_child(x)
+
+		SGXcatapult.write(msg)
+	end
+
 	def response(env)
 		puts 'ENV: ' + env.to_s
 		body = Rack::Request.new(env).body.read
@@ -721,8 +750,45 @@ class WebhookHandler < Goliath::API
 			when 'sms'
 				text = params['text']
 			when 'mms'
-				text = "MMS (pic not implemented) with text: " +
-					params['text']
+				has_media = false
+				params['media'].each do |media_url|
+					if not media_url.end_with?('.smil',
+						'.txt', '.xml')
+
+						has_media = true
+						send_media(others_num + '@' +
+							ARGV[0],
+							bare_jid, media_url)
+					end
+				end
+
+				if params['text'].empty?
+					if not has_media
+						text = '[suspected group msg ' +
+							'with no text (odd)]'
+					end
+				else
+					if has_media
+						# TODO: write/use a caption XEP
+						text = params['text']
+					else
+						text = '[suspected group msg ' +
+							'(recipient list not ' +
+							'available) with ' +
+							'following text] ' +
+							params['text']
+					end
+				end
+
+				# ie. if text param non-empty or had no media
+				if not text.empty?
+					msg = Blather::Stanza::Message.new(
+						bare_jid, text)
+					msg.from = others_num + '@' + ARGV[0]
+					SGXcatapult.write(msg)
+				end
+
+				return [200, {}, "OK"]
 			else
 				text = "unknown type (#{params['eventType']})" +
 					" with text: " + params['text']

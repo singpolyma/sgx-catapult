@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License along
 # with sgx-catapult.  If not, see <http://www.gnu.org/licenses/>.
 
-puts "Soprani.ca/MMS Proxy for XMPP - Catapult        v0.002"
+puts "Soprani.ca/MMS Proxy for XMPP - Catapult        v0.003"
 
 require 'goliath'
 require 'net/http'
@@ -97,7 +97,8 @@ class WebhookHandler < Goliath::API
 		end
 
 		# TODO: maybe need to reflect more headers (multi-part?)
-		[200, {}, response.body]
+		[200, {'Content-Length' => response['content-length']},
+			response.body]
 	end
 end
 

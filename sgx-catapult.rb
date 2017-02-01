@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.015"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.016"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -533,6 +533,7 @@ module SGXcatapult
 					conn = Hiredis::Connection.new
 					conn.connect(ARGV[4], ARGV[5].to_i)
 
+					# TODO: use SETNX instead
 					conn.write ["EXISTS", num_key]
 					if conn.read == 1
 						conn.disconnect
@@ -555,7 +556,7 @@ module SGXcatapult
 						next
 					end
 
-					conn.write ["RPUSH",num_key,bare_jid]
+					conn.write ["SET", num_key, bare_jid]
 					if conn.read != 1
 						conn.disconnect
 
@@ -571,6 +572,8 @@ module SGXcatapult
 					conn.write ["RPUSH",cred_key,api_token]
 					conn.write ["RPUSH",cred_key,api_secret]
 					conn.write ["RPUSH",cred_key,phone_num]
+
+					# TODO: confirm cred_key list size == 4
 
 					for n in 1..4 do
 						# TODO: catch/relay RuntimeError
@@ -760,8 +763,8 @@ class WebhookHandler < Goliath::API
 			return [200, {}, "OK"]
 		end
 
-		conn.write ["LRANGE", num_key, 0, 0]
-		bare_jid = conn.read[0]
+		conn.write ["GET", num_key]
+		bare_jid = conn.read
 		conn.disconnect
 
 		msg = ''

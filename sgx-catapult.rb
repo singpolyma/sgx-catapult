@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.016"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.017"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -524,7 +524,7 @@ module SGXcatapult
 			if response.code == '200'
 				params = JSON.parse response.body
 				if params['numberState'] == 'enabled'
-					num_key = "catapult_num-" + phone_num
+					jid_key = "catapult_jid-" + phone_num
 
 					bare_jid = i.from.to_s.split('/', 2)[0]
 					cred_key = "catapult_cred-" + bare_jid
@@ -534,7 +534,7 @@ module SGXcatapult
 					conn.connect(ARGV[4], ARGV[5].to_i)
 
 					# TODO: use SETNX instead
-					conn.write ["EXISTS", num_key]
+					conn.write ["EXISTS", jid_key]
 					if conn.read == 1
 						conn.disconnect
 
@@ -556,7 +556,7 @@ module SGXcatapult
 						next
 					end
 
-					conn.write ["SET", num_key, bare_jid]
+					conn.write ["SET", jid_key, bare_jid]
 					if conn.read != 1
 						conn.disconnect
 
@@ -739,7 +739,7 @@ class WebhookHandler < Goliath::API
 			return [200, {}, "OK"]
 		end
 
-		num_key = "catapult_num-" + users_num
+		jid_key = "catapult_jid-" + users_num
 
 		if others_num[0] != '+'
 			# TODO: check that others_num actually a shortcode first
@@ -750,11 +750,11 @@ class WebhookHandler < Goliath::API
 		conn = Hiredis::Connection.new
 		conn.connect(ARGV[4], ARGV[5].to_i)
 
-		conn.write ["EXISTS", num_key]
+		conn.write ["EXISTS", jid_key]
 		if conn.read == 0
 			conn.disconnect
 
-			puts "num_key (#{num_key}) DNE; Catapult misconfigured?"
+			puts "jid_key (#{jid_key}) DNE; Catapult misconfigured?"
 
 			# TODO: likely not appropriate; give error to Catapult?
 			# TODO: add text re credentials not being registered
@@ -763,7 +763,7 @@ class WebhookHandler < Goliath::API
 			return [200, {}, "OK"]
 		end
 
-		conn.write ["GET", num_key]
+		conn.write ["GET", jid_key]
 		bare_jid = conn.read
 		conn.disconnect
 

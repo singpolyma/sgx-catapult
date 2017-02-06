@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.019\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.021\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -123,6 +123,11 @@ module SGXcatapult
 		jid_key = "catapult_jid-" + num_dest
 		conn.write ["EXISTS", jid_key]
 		if conn.read > 0
+			# setup delivery receipt; sort of a reply but not quite
+			rcpt = ReceiptMessage.new(bare_jid)
+			rcpt.from = m.to
+
+			# pass on the original message (before sending receipt)
 			conn.write ["GET", jid_key]
 			m.to = conn.read
 
@@ -130,6 +135,20 @@ module SGXcatapult
 
 			puts 'XRESPONSE0: ' + m.inspect
 			write_to_stream m
+
+			# send a delivery receipt back to the sender
+			# TODO: send only when requested per XEP-0184
+
+			# TODO: put in member/instance variable
+			uuid_gen = UUID.new
+			rcpt['id'] = uuid_gen.generate
+			rcvd = Nokogiri::XML::Node.new 'received', rcpt.document
+			rcvd['xmlns'] = 'urn:xmpp:receipts'
+			rcvd['id'] = m.id
+			rcpt.add_child(rcvd)
+
+			puts 'XRESPONSE1: ' + rcpt.inspect
+			write_to_stream rcpt
 
 			conn.disconnect
 			next

@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.018\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.019\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -118,6 +118,23 @@ module SGXcatapult
 
 		conn.write ["LRANGE", cred_key, 0, 3]
 		user_id, api_token, api_secret, users_num = conn.read
+
+		# if the destination user is in the system just pass on directly
+		jid_key = "catapult_jid-" + num_dest
+		conn.write ["EXISTS", jid_key]
+		if conn.read > 0
+			conn.write ["GET", jid_key]
+			m.to = conn.read
+
+			m.from = users_num + '@' + ARGV[0]
+
+			puts 'XRESPONSE0: ' + m.inspect
+			write_to_stream m
+
+			conn.disconnect
+			next
+		end
+
 		conn.disconnect
 
 		uri = URI.parse('https://api.catapult.inetwork.com')

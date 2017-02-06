@@ -30,7 +30,7 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.017"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.018\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -39,6 +39,9 @@ if ARGV.size != 9 then
 		"<http_listen_port> <mms_proxy_prefix_url>"
 	exit 0
 end
+
+t = Time.now
+puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
 
 module SGXcatapult
 	extend Blather::DSL

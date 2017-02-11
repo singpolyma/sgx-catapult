@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.023\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.024\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -485,7 +485,8 @@ module SGXcatapult
 	iq '/iq/ns:query', :ns =>
 		'http://jabber.org/protocol/disco#info' do |i, xpath_result|
 
-		if i.to.to_s.include? '@'
+		# respond to capabilities request for an sgx-catapult number JID
+		if i.to.node
 			# TODO: confirm the node URL is expected using below
 			#puts "XR[node]: #{xpath_result[0]['node']}"
 
@@ -498,6 +499,7 @@ module SGXcatapult
 			next
 		end
 
+		# respond to capabilities request for sgx-catapult itself
 		msg = i.reply
 		msg.identities = [{:name =>
 			'Soprani.ca Gateway to XMPP - Catapult',

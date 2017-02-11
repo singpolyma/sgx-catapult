@@ -2,4 +2,4 @@
 
 An XMPP to SMS gateway for Catapult (also known as Bandwidth AP), using XEP-0100.  The "SGX" stands for "Soprani.ca Gateway to XMPP", as this is associated with the Soprani.ca project.
 
-Note that the canonical location for this repository is [https://gitlab.com/ossguy/sgx-catapult].  Please use that location for all pull requests, issue reports, etc.  Other locations are likely out-of-date.
+Note that the canonical location for this repository is https://gitlab.com/ossguy/sgx-catapult .  Please use that location for all pull requests, issue reports, etc.  Other locations are likely out-of-date.

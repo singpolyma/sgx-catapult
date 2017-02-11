@@ -31,7 +31,9 @@ require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.022\n\n"
+$stdout.sync = true
+
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.023\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +

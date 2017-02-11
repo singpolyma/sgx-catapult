@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.024\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.025\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -927,6 +927,13 @@ end
 
 EM.run do
 	SGXcatapult.run
+
+	# required when using Prosody otherwise disconnects on 6-hour inactivity
+	EM.add_periodic_timer(3600) do
+		msg = Blather::Stanza::Iq::Ping.new(:get, 'localhost')
+		msg.from = ARGV[0]
+		SGXcatapult.write(msg)
+	end
 
 	server = Goliath::Server.new('0.0.0.0', ARGV[7].to_i)
 	server.api = WebhookHandler.new

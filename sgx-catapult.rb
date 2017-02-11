@@ -25,12 +25,13 @@ require 'redis/connection/hiredis'
 require 'time'
 require 'uri'
 require 'uuid'
+require 'webrick'
 
 require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.021\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.022\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -167,7 +168,11 @@ module SGXcatapult
 			'from'			=> users_num,
 			'to'			=> num_dest,
 			'text'			=> m.body,
-			'tag'			=> m.id, # TODO: message has it?
+			'tag'			=>
+				# callbacks need both the id and resourcepart
+				WEBrick::HTTPUtils.escape(m.id) + ' ' +
+				WEBrick::HTTPUtils.escape(
+					m.from.to_s.split('/', 2)[1] ),
 			'receiptRequested'	=> 'all',
 			'callbackUrl'		=> ARGV[6]
 		})
@@ -424,7 +429,11 @@ module SGXcatapult
 			'media'			=> [
 				'https://api.catapult.inetwork.com/v1/users/' +
 				user_id + '/media/' + media_name],
-			'tag'			=> i.id  # TODO: message has it?
+			'tag'			=>
+				# callbacks need both the id and resourcepart
+				WEBrick::HTTPUtils.escape(i.id) + ' ' +
+				WEBrick::HTTPUtils.escape(
+					i.from.to_s.split('/', 2)[1] )
 			# TODO: add back when Bandwidth AP supports it (?); now:
 			#  "The ''messages'' resource property
 			#  ''receiptRequested'' is not supported for MMS"
@@ -863,32 +872,41 @@ class WebhookHandler < Goliath::API
 
 			msg = Blather::Stanza::Message.new(bare_jid, text)
 		else # per prior switch, this is:  params['direction'] == 'out'
-			msg = ReceiptMessage.new(bare_jid)
-
-			# TODO: put in member/instance variable
-			uuid_gen = UUID.new
-			msg['id'] = uuid_gen.generate
+			tag_parts = params['tag'].split(' ', 2)
+			id = WEBrick::HTTPUtils.unescape(tag_parts[0])
+			resourcepart = WEBrick::HTTPUtils.unescape(tag_parts[1])
 
 			case params['deliveryState']
 			when 'not-delivered'
-				# TODO: add text re deliveryDescription reason
-				msg = SGXcatapult.error_msg(msg, nil, :cancel,
-					'service-unavailable')
-				return [200, {}, "OK"]
+				# create a bare message like the one user sent
+				msg = Blather::Stanza::Message.new(
+					others_num + '@' + ARGV[0])
+				msg.from = bare_jid + '/' + resourcepart
+				msg['id'] = id
+
+				# create an error reply to the bare message
+				msg = Blather::StanzaError.new(msg,
+					'recipient-unavailable', :wait).to_node
 			when 'delivered'
+				msg = ReceiptMessage.new(bare_jid)
+
+				# TODO: put in member/instance variable
+				uuid_gen = UUID.new
+				msg['id'] = uuid_gen.generate
+
 				# TODO: send only when requested per XEP-0184
 				rcvd = Nokogiri::XML::Node.new 'received',
 					msg.document
 				rcvd['xmlns'] = 'urn:xmpp:receipts'
-				rcvd['id'] = params['tag']
+				rcvd['id'] = id
 				msg.add_child(rcvd)
 			when 'waiting'
 				# can't really do anything with it; nice to know
-				puts "message with id #{params['tag']} waiting"
+				puts "message with id #{id} waiting"
 				return [200, {}, "OK"]
 			else
 				# TODO: notify somehow of unknown state receivd?
-				puts "message with id #{params['tag']} has " +
+				puts "message with id #{id} has " +
 					"other state #{params['deliveryState']}"
 				return [200, {}, "OK"]
 			end

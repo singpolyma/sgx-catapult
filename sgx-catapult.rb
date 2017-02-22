@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.025\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.026\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -212,12 +212,30 @@ module SGXcatapult
 	presence :subscribe? do |p|
 		puts "PRESENCE1: #{p.inspect}"
 
+
+		# subscriptions are allowed from anyone - send reply immediately
 		msg = Blather::Stanza::Presence.new
 		msg.to = p.from
 		msg.from = p.to
 		msg.type = :subscribed
 
 		puts "RESPONSE5: #{msg.inspect}"
+		write_to_stream msg
+
+
+		# send a <presence> immediately; not automatically probed for it
+		# TODO: refactor so no "presence :probe? do |p|" duplicate below
+		caps = Blather::Stanza::Capabilities.new
+		# TODO: user a better node URI (?)
+		caps.node = 'http://catapult.sgx.soprani.ca/'
+		caps.identities = user_cap_identities()
+		caps.features = user_cap_features()
+
+		msg = caps.c
+		msg.to = p.from
+		msg.from = p.to.to_s + '/sgx'
+
+		puts 'RESPONSE0: ' + msg.inspect
 		write_to_stream msg
 	end
 

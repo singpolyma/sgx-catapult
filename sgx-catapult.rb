@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.026\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.027\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -693,7 +693,7 @@ module SGXcatapult
 				".\nUser Id is nick, API Token is username, " +
 				"API Secret is password, Phone Number is phone"+
 				".\n\nThe source code for this gateway is at " +
-				"https://github.com/ossguy/sgx-catapult ." +
+				"https://gitlab.com/ossguy/sgx-catapult ." +
 				"\nCopyright (C) 2017  Denver Gingerich and " +
 				"others, licensed under AGPLv3+."
 			n2 = Nokogiri::XML::Node.new 'nick',msg.document
@@ -722,7 +722,7 @@ module SGXcatapult
 				"page as well as the Phone Number\nin your " +
 				"account you want to use (ie. '+12345678901')" +
 				".\n\nThe source code for this gateway is at " +
-				"https://github.com/ossguy/sgx-catapult ." +
+				"https://gitlab.com/ossguy/sgx-catapult ." +
 				"\nCopyright (C) 2017  Denver Gingerich and " +
 				"others, licensed under AGPLv3+."
 			msg.add_child(x)

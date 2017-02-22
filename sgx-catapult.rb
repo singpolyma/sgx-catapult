@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.027\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.028\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -219,7 +219,7 @@ module SGXcatapult
 		msg.from = p.to
 		msg.type = :subscribed
 
-		puts "RESPONSE5: #{msg.inspect}"
+		puts 'RESPONSE5a: ' + msg.inspect
 		write_to_stream msg
 
 
@@ -235,7 +235,17 @@ module SGXcatapult
 		msg.to = p.from
 		msg.from = p.to.to_s + '/sgx'
 
-		puts 'RESPONSE0: ' + msg.inspect
+		puts 'RESPONSE5b: ' + msg.inspect
+		write_to_stream msg
+
+
+		# need to subscribe back so Conversations displays images inline
+		msg = Blather::Stanza::Presence.new
+		msg.to = p.from.to_s.split('/', 2)[0]
+		msg.from = p.to.to_s.split('/', 2)[0]
+		msg.type = :subscribe
+
+		puts 'RESPONSE5c: ' + msg.inspect
 		write_to_stream msg
 	end
 

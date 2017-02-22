@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.028\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.029\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -420,6 +420,15 @@ module SGXcatapult
 		conn.write ["LRANGE", cred_key, 0, 3]
 		user_id, api_token, api_secret, users_num = conn.read
 		conn.disconnect
+
+		# Gajim bug: <close/> has Jingle (not transport) sid; fix later
+		if not @jingle_fnames.key? cn[0]['sid']
+			puts 'ERROR: Not found in filename map: ' + cn[0]['sid']
+
+			next
+			# TODO: in case only Gajim's <data/> bug fixed, add map:
+			#cn[0]['sid'] = @jingle_tsids[cn[0]['sid']]
+		end
 
 		# upload cached data to server (before success reply)
 		media_name = Time.now.utc.iso8601 + '_' + @uuid_gen.generate +

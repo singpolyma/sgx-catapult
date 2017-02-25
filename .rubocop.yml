@@ -1,0 +1,86 @@
+Metrics/LineLength:
+  Max: 80
+
+Style/Tab:
+   Enabled: false
+
+Style/IndentationWidth:
+  Width: 1 # one tab
+
+Lint/EndAlignment:
+  EnforcedStyleAlignWith: variable
+
+Metrics/AbcSize:
+  Max: 111
+
+Metrics/BlockLength:
+  Max: 200
+
+Metrics/BlockNesting:
+  Max: 5
+
+Metrics/ClassLength:
+  Max: 200
+
+Metrics/CyclomaticComplexity:
+  Max: 20
+
+Metrics/MethodLength:
+  Max: 200
+
+Metrics/ModuleLength:
+  Max: 1000
+
+Metrics/PerceivedComplexity:
+  Max: 20
+
+Style/AndOr:
+  Enabled: false
+
+Style/BlockDelimiters:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/FormatString:
+  EnforcedStyle: percent
+
+# Offense count: 1
+Style/IfInsideElse:
+  Exclude:
+    - 'sgx-catapult.rb'
+
+Style/LeadingCommentSpace:
+  Enabled: false
+
+Style/MultilineMethodCallBraceLayout:
+  Enabled: false
+
+Style/MultilineOperationIndentation:
+  Enabled: false
+
+Style/Next:
+  Enabled: false
+
+Style/Not:
+  Enabled: false
+
+Style/NumericPredicate:
+  Enabled: false
+
+Style/SpaceAroundOperators:
+  Enabled: false
+
+Style/SpaceInsideHashLiteralBraces:
+  EnforcedStyle: no_space
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+  Enabled: false
+
+Style/NegatedIf:
+  Enabled: false
+
+Style/RedundantReturn:
+  Enabled: false

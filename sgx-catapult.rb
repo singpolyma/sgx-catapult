@@ -22,9 +22,9 @@ require 'blather/client/dsl'
 require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
+require 'securerandom'
 require 'time'
 require 'uri'
-require 'uuid'
 require 'webrick'
 
 require 'goliath/api'
@@ -53,7 +53,6 @@ module SGXcatapult
 	@jingle_sids = {}
 	@jingle_fnames = {}
 	@partial_data = {}
-	@uuid_gen = UUID.new
 
 	def self.run
 		client.run
@@ -148,8 +147,7 @@ module SGXcatapult
 			# TODO: send only when requested per XEP-0184
 
 			# TODO: put in member/instance variable
-			uuid_gen = UUID.new
-			rcpt['id'] = uuid_gen.generate
+			rcpt['id'] = SecureRandom.uuid
 			rcvd = Nokogiri::XML::Node.new 'received', rcpt.document
 			rcvd['xmlns'] = 'urn:xmpp:receipts'
 			rcvd['id'] = m.id
@@ -344,7 +342,7 @@ module SGXcatapult
 			content.add_child(dsc)
 		else
 			# for Conversations - it tries s5b even if caps ibb-only
-			transport['sid'] = @uuid_gen.generate
+			transport['sid'] = SecureRandom.uuid
 			j['action'] = 'transport-replace'
 			j['initiator'] = i.from
 		end
@@ -436,8 +434,9 @@ module SGXcatapult
 		end
 
 		# upload cached data to server (before success reply)
-		media_name = Time.now.utc.iso8601 + '_' + @uuid_gen.generate +
-			'_' + @jingle_fnames[cn[0]['sid']]
+		media_name =
+			"#{Time.now.utc.iso8601}_#{SecureRandom.uuid}"\
+			"_#{@jingle_fnames[cn[0]['sid']]}"
 		puts 'name to save: ' + media_name
 
 		uri = URI.parse('https://api.catapult.inetwork.com')
@@ -1020,8 +1019,7 @@ class WebhookHandler < Goliath::API
 				msg = ReceiptMessage.new(bare_jid)
 
 				# TODO: put in member/instance variable
-				uuid_gen = UUID.new
-				msg['id'] = uuid_gen.generate
+				msg['id'] = SecureRandom.uuid
 
 				# TODO: send only when requested per XEP-0184
 				rcvd = Nokogiri::XML::Node.new(

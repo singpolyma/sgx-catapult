@@ -547,7 +547,7 @@ module SGXcatapult
 		msg = i.reply
 		msg.identities = [{
 			name: 'Soprani.ca Gateway to XMPP - Catapult',
-			type: 'sms-ctplt', category: 'gateway'
+			type: 'sms', category: 'gateway'
 		}]
 		msg.features = [
 			"jabber:iq:register",

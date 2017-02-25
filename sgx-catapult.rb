@@ -703,8 +703,22 @@ module SGXcatapult
 		elsif i.type == :get
 			orig = i.reply
 
+			bare_jid = i.from.to_s.split('/', 2)[0]
+			cred_key = "catapult_cred-" + bare_jid
+
+			conn = Hiredis::Connection.new
+			conn.connect(ARGV[4], ARGV[5].to_i)
+			conn.write(["LINDEX", cred_key, 3])
+			existing_number = conn.read
+			conn.disconnect
+
 			msg = Nokogiri::XML::Node.new 'query',orig.document
 			msg['xmlns'] = 'jabber:iq:register'
+
+			if existing_number
+				msg.add_child(Nokogiri::XML::Node.new('registered', msg.document))
+			end
+
 			n1 = Nokogiri::XML::Node.new 'instructions',msg.document
 			n1.content= "Enter the information from your Account " +
 				"page as well as the Phone Number\nin your " +
@@ -719,6 +733,7 @@ module SGXcatapult
 			n3 = Nokogiri::XML::Node.new 'username',msg.document
 			n4 = Nokogiri::XML::Node.new 'password',msg.document
 			n5 = Nokogiri::XML::Node.new 'phone',msg.document
+			n5.content = existing_number.to_s
 			msg.add_child(n1)
 			msg.add_child(n2)
 			msg.add_child(n3)
@@ -733,7 +748,8 @@ module SGXcatapult
 				{:required => true, :type => :"text-private",
 				:label => 'API Secret', :var => 'password'},
 				{:required => true, :type => :"text-single",
-				:label => 'Phone Number', :var => 'phone'}
+				:label => 'Phone Number', :var => 'phone',
+				:value => existing_number.to_s}
 			]
 			x.title= 'Register for ' +
 				'Soprani.ca Gateway to XMPP - Catapult'

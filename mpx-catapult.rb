@@ -26,8 +26,8 @@ require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
 
-if ARGV.size != 3 then
-	puts "Usage: mpx-catapult.rb <http_listen_port> " +
+if ARGV.size != 3
+	puts "Usage: mpx-catapult.rb <http_listen_port> "\
 		"<redis_hostname> <redis_port>"
 	exit 0
 end
@@ -50,8 +50,11 @@ class WebhookHandler < Goliath::API
 			conn.connect(ARGV[1], ARGV[2].to_i)
 		rescue => e
 			puts 'ERROR: Redis connection failed: ' + e.inspect
-			return [500, {'Content-Type' => 'text/plain'},
-				e.inspect]
+			return [
+				500,
+				{'Content-Type' => 'text/plain'},
+				e.inspect
+			]
 		end
 
 		conn.write ["EXISTS", cred_key]
@@ -59,8 +62,11 @@ class WebhookHandler < Goliath::API
 			conn.disconnect
 
 			puts 'ERROR: invalid path rqst: ' + env['REQUEST_PATH']
-			return [404, {'Content-Type' => 'text/plain'},
-				'not found']
+			return [
+				404,
+				{'Content-Type' => 'text/plain'},
+				'not found'
+			]
 		end
 
 		conn.write ["LRANGE", cred_key, 0, 3]
@@ -80,8 +86,11 @@ class WebhookHandler < Goliath::API
 				'/media/' +env['REQUEST_PATH'].split('/', 3)[2])
 		else
 			puts 'ERROR: received non-HEAD/-GET request'
-			return [500, {'Content-Type' => 'text/plain'},
-				e.inspect]
+			return [
+				500,
+				{'Content-Type' => 'text/plain'},
+				e.inspect
+			]
 		end
 		request.basic_auth api_token, api_secret
 		response = http.request(request)
@@ -93,12 +102,18 @@ class WebhookHandler < Goliath::API
 			puts 'ERROR: unexpected return code ' + response.code
 
 			if response.code == '404'
-				return [404, {'Content-Type' => 'text/plain'},
-					'not found']
+				return [
+					404,
+					{'Content-Type' => 'text/plain'},
+					'not found'
+				]
 			end
 
-			return [response.code, {'Content-Type' => 'text/plain'},
-				'unexpected error']
+			return [
+				response.code,
+				{'Content-Type' => 'text/plain'},
+				'unexpected error'
+			]
 		end
 
 		# TODO: maybe need to reflect more headers (multi-part?)

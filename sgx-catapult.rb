@@ -35,10 +35,10 @@ $stdout.sync = true
 
 puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.031\n\n"
 
-if ARGV.size != 9 then
-	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
-		"<server_hostname> <server_port> " +
-		"<redis_hostname> <redis_port> <delivery_receipt_url> " +
+if ARGV.size != 9
+	puts "Usage: sgx-catapult.rb <component_jid> <component_password> "\
+		"<server_hostname> <server_port> "\
+		"<redis_hostname> <redis_port> <delivery_receipt_url> "\
 		"<http_listen_port> <mms_proxy_prefix_url>"
 	exit 0
 end
@@ -49,9 +49,9 @@ puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
 module SGXcatapult
 	extend Blather::DSL
 
-	@jingle_sids = Hash.new
-	@jingle_fnames = Hash.new
-	@partial_data = Hash.new
+	@jingle_sids = {}
+	@jingle_fnames = {}
+	@partial_data = {}
 	@uuid_gen = UUID.new
 
 	def self.run
@@ -97,8 +97,10 @@ module SGXcatapult
 				num_dest = num_and_context[0]
 			else
 				# TODO: text re num not (yet) supportd/implmentd
-				write_to_stream error_msg(m.reply, m.body,
-					:cancel, 'item-not-found')
+				write_to_stream error_msg(
+					m.reply, m.body,
+					:cancel, 'item-not-found'
+				)
 				next
 			end
 		end
@@ -114,8 +116,10 @@ module SGXcatapult
 			conn.disconnect
 
 			# TODO: add text re credentials not being registered
-			write_to_stream error_msg(m.reply, m.body, :auth,
-				'registration-required')
+			write_to_stream error_msg(
+				m.reply, m.body, :auth,
+				'registration-required'
+			)
 			next
 		end
 
@@ -166,7 +170,7 @@ module SGXcatapult
 			'/messages')
 		request.basic_auth api_token, api_secret
 		request.add_field('Content-Type', 'application/json')
-		request.body = JSON.dump({
+		request.body = JSON.dump(
 			'from'			=> users_num,
 			'to'			=> num_dest,
 			'text'			=> m.body,
@@ -174,10 +178,11 @@ module SGXcatapult
 				# callbacks need both the id and resourcepart
 				WEBrick::HTTPUtils.escape(m.id) + ' ' +
 				WEBrick::HTTPUtils.escape(
-					m.from.to_s.split('/', 2)[1] ),
+					m.from.to_s.split('/', 2)[1]
+				),
 			'receiptRequested'	=> 'all',
 			'callbackUrl'		=> ARGV[6]
-		})
+		)
 		response = http.request(request)
 
 		puts 'API response to send: ' + response.to_s + ' with code ' +
@@ -185,33 +190,34 @@ module SGXcatapult
 
 		if response.code != '201'
 			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(m.reply, m.body, :cancel,
-				'internal-server-error')
+			write_to_stream error_msg(
+				m.reply, m.body, :cancel,
+				'internal-server-error'
+			)
 			next
 		end
 	end
 
-	def self.user_cap_identities()
-		[{:category => 'client', :type => 'sms'}]
+	def self.user_cap_identities
+		[{category: 'client', type: 'sms'}]
 	end
 
-	def self.user_cap_features()
-	[
-		"urn:xmpp:receipts",
-		"urn:xmpp:jingle:1", "urn:xmpp:jingle:transports:ibb:1",
+	def self.user_cap_features
+		[
+			"urn:xmpp:receipts",
+			"urn:xmpp:jingle:1", "urn:xmpp:jingle:transports:ibb:1",
 
-		# TODO: eventually add more efficient file transfer mechanisms
-		#"urn:xmpp:jingle:transports:s5b:1",
+			# TODO: add more efficient file transfer mechanisms
+			#"urn:xmpp:jingle:transports:s5b:1",
 
-		# TODO: MUST add all relevant/reasonable vers of file-transfer
-		#"urn:xmpp:jingle:apps:file-transfer:4"
-		"urn:xmpp:jingle:apps:file-transfer:3"
-	]
+			# TODO: MUST add all reasonable vers of file-transfer
+			#"urn:xmpp:jingle:apps:file-transfer:4"
+			"urn:xmpp:jingle:apps:file-transfer:3"
+		]
 	end
 
 	presence :subscribe? do |p|
 		puts "PRESENCE1: #{p.inspect}"
-
 
 		# subscriptions are allowed from anyone - send reply immediately
 		msg = Blather::Stanza::Presence.new
@@ -222,14 +228,13 @@ module SGXcatapult
 		puts 'RESPONSE5a: ' + msg.inspect
 		write_to_stream msg
 
-
 		# send a <presence> immediately; not automatically probed for it
 		# TODO: refactor so no "presence :probe? do |p|" duplicate below
 		caps = Blather::Stanza::Capabilities.new
 		# TODO: user a better node URI (?)
 		caps.node = 'http://catapult.sgx.soprani.ca/'
-		caps.identities = user_cap_identities()
-		caps.features = user_cap_features()
+		caps.identities = user_cap_identities
+		caps.features = user_cap_features
 
 		msg = caps.c
 		msg.to = p.from
@@ -237,7 +242,6 @@ module SGXcatapult
 
 		puts 'RESPONSE5b: ' + msg.inspect
 		write_to_stream msg
-
 
 		# need to subscribe back so Conversations displays images inline
 		msg = Blather::Stanza::Presence.new
@@ -255,8 +259,8 @@ module SGXcatapult
 		caps = Blather::Stanza::Capabilities.new
 		# TODO: user a better node URI (?)
 		caps.node = 'http://catapult.sgx.soprani.ca/'
-		caps.identities = user_cap_identities()
-		caps.features = user_cap_features()
+		caps.identities = user_cap_identities
+		caps.features = user_cap_features
 
 		msg = caps.c
 		msg.to = p.from
@@ -266,7 +270,7 @@ module SGXcatapult
 		write_to_stream msg
 	end
 
-	iq '/iq/ns:jingle', :ns => 'urn:xmpp:jingle:1' do |i, jn|
+	iq '/iq/ns:jingle', ns: 'urn:xmpp:jingle:1' do |i, jn|
 		puts "IQj: #{i.inspect}"
 
 		if jn[0]['action'] == 'transport-accept'
@@ -302,7 +306,7 @@ module SGXcatapult
 
 		ibb_found = false
 		last_sid = ''
-		for child in cn.children
+		cn.children.each do |child|
 			if child.element_name == 'transport'
 				puts 'TPORT: ' + child.namespace.href
 				last_sid = child['sid']
@@ -315,17 +319,17 @@ module SGXcatapult
 			end
 		end
 
-		j = Nokogiri::XML::Node.new 'jingle',msg.document
+		j = Nokogiri::XML::Node.new 'jingle', msg.document
 		j['xmlns'] = 'urn:xmpp:jingle:1'
 		j['sid'] = jn[0]['sid']
 		msg.add_child(j)
 
-		content = Nokogiri::XML::Node.new 'content',msg.document
+		content = Nokogiri::XML::Node.new 'content', msg.document
 		content['name'] = cn['name']
 		content['creator'] = 'initiator'
 		j.add_child(content)
 
-		transport = Nokogiri::XML::Node.new 'transport',msg.document
+		transport = Nokogiri::XML::Node.new 'transport', msg.document
 		# TODO: make block-size more variable and/or dependent on sender
 		transport['block-size'] = '4096'
 		transport['xmlns'] = 'urn:xmpp:jingle:transports:ibb:1'
@@ -334,7 +338,7 @@ module SGXcatapult
 			j['action'] = 'session-accept'
 			j['responder'] = i.from
 
-			dsc = Nokogiri::XML::Node.new 'description',msg.document
+			dsc = Nokogiri::XML::Node.new 'description', msg.document
 			dsc['xmlns'] = 'urn:xmpp:jingle:apps:file-transfer:3'
 			content.add_child(dsc)
 		else
@@ -349,35 +353,31 @@ module SGXcatapult
 
 		# TODO: save <date> as well? Gajim sends, Conversations does not
 		# TODO: save/validate <size> with eventual full received length
-		fname = cn.children.find { |v| v.element_name == "description"
-			}.children.find { |w| w.element_name == "offer"
-			}.children.find { |x| x.element_name == "file"
-			}.children.find { |y| y.element_name == "name" }
+		fname =
+			cn
+			.children.find { |v| v.element_name == "description" }
+			.children.find { |w| w.element_name == "offer" }
+			.children.find { |x| x.element_name == "file" }
+			.children.find { |y| y.element_name == "name" }
 		@jingle_fnames[transport['sid']] = fname.text
 
 		puts "RESPONSE9: #{msg.inspect}"
 		write_to_stream msg
 	end
 
-	iq '/iq/ns:open', :ns =>
-		'http://jabber.org/protocol/ibb' do |i, on|
-
+	iq '/iq/ns:open', ns:	'http://jabber.org/protocol/ibb' do |i, on|
 		puts "IQo: #{i.inspect}"
 
 		@partial_data[on[0]['sid']] = ''
 		write_to_stream i.reply
 	end
 
-	iq '/iq/ns:data', :ns =>
-		'http://jabber.org/protocol/ibb' do |i, dn|
-
+	iq '/iq/ns:data', ns:	'http://jabber.org/protocol/ibb' do |i, dn|
 		@partial_data[dn[0]['sid']] += Base64.decode64(dn[0].text)
 		write_to_stream i.reply
 	end
 
-	iq '/iq/ns:close', :ns =>
-		'http://jabber.org/protocol/ibb' do |i, cn|
-
+	iq '/iq/ns:close', ns:	'http://jabber.org/protocol/ibb' do |i, cn|
 		puts "IQc: #{i.inspect}"
 		write_to_stream i.reply
 
@@ -394,8 +394,10 @@ module SGXcatapult
 				num_dest = num_and_context[0]
 			else
 				# TODO: text re num not (yet) supportd/implmentd
-				write_to_stream error_msg(i.reply, nil,
-					:cancel, 'item-not-found')
+				write_to_stream error_msg(
+					i.reply, nil,
+					:cancel, 'item-not-found'
+				)
 				next
 			end
 		end
@@ -412,8 +414,10 @@ module SGXcatapult
 			conn.disconnect
 
 			# TODO: add text re credentials not being registered
-			write_to_stream error_msg(i.reply, nil, :auth,
-				'registration-required')
+			write_to_stream error_msg(
+				i.reply, nil, :auth,
+				'registration-required'
+			)
 			next
 		end
 
@@ -449,8 +453,10 @@ module SGXcatapult
 
 		if response.code != '200'
 			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(i.reply, nil, :cancel,
-				'internal-server-error')
+			write_to_stream error_msg(
+				i.reply, nil, :cancel,
+				'internal-server-error'
+			)
 			next
 		end
 
@@ -461,24 +467,26 @@ module SGXcatapult
 			'/messages')
 		request.basic_auth api_token, api_secret
 		request.add_field('Content-Type', 'application/json')
-		request.body = JSON.dump({
+		request.body = JSON.dump(
 			'from'			=> users_num,
 			'to'			=> num_dest,
 			'text'			=> '',
 			'media'			=> [
 				'https://api.catapult.inetwork.com/v1/users/' +
-				user_id + '/media/' + media_name],
+				user_id + '/media/' + media_name
+			],
 			'tag'			=>
 				# callbacks need both the id and resourcepart
 				WEBrick::HTTPUtils.escape(i.id) + ' ' +
 				WEBrick::HTTPUtils.escape(
-					i.from.to_s.split('/', 2)[1] )
+					i.from.to_s.split('/', 2)[1]
+				)
 			# TODO: add back when Bandwidth AP supports it (?); now:
 			#  "The ''messages'' resource property
 			#  ''receiptRequested'' is not supported for MMS"
 			#'receiptRequested'	=> 'all',
 			#'callbackUrl'		=> ARGV[6]
-		})
+		)
 		response = http.request(request)
 
 		puts 'mAPI response to send: ' + response.to_s + ' with code ' +
@@ -486,8 +494,10 @@ module SGXcatapult
 
 		if response.code != '201'
 			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(i.reply, nil, :cancel,
-				'internal-server-error')
+			write_to_stream error_msg(
+				i.reply, nil, :cancel,
+				'internal-server-error'
+			)
 			next
 		end
 
@@ -498,14 +508,14 @@ module SGXcatapult
 		msg.to = i.from
 		msg.from = i.to
 
-		j = Nokogiri::XML::Node.new 'jingle',msg.document
+		j = Nokogiri::XML::Node.new 'jingle', msg.document
 		j['xmlns'] = 'urn:xmpp:jingle:1'
 		j['action'] = 'session-terminate'
 		j['sid'] = @jingle_sids[cn[0]['sid']]
 		msg.add_child(j)
 
-		r = Nokogiri::XML::Node.new 'reason',msg.document
-		s = Nokogiri::XML::Node.new 'success',msg.document
+		r = Nokogiri::XML::Node.new 'reason', msg.document
+		s = Nokogiri::XML::Node.new 'success', msg.document
 		r.add_child(s)
 		j.add_child(r)
 
@@ -513,23 +523,19 @@ module SGXcatapult
 		write_to_stream msg
 	end
 
-	iq '/iq/ns:query', :ns =>
-		'http://jabber.org/protocol/disco#items' do |i, xpath_result|
-
+	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#items' do |i|
 		write_to_stream i.reply
 	end
 
-	iq '/iq/ns:query', :ns =>
-		'http://jabber.org/protocol/disco#info' do |i, xpath_result|
-
+	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#info' do |i|
 		# respond to capabilities request for an sgx-catapult number JID
 		if i.to.node
 			# TODO: confirm the node URL is expected using below
 			#puts "XR[node]: #{xpath_result[0]['node']}"
 
 			msg = i.reply
-			msg.identities = user_cap_identities()
-			msg.features = user_cap_features()
+			msg.identities = user_cap_identities
+			msg.features = user_cap_features
 
 			puts 'RESPONSE7: ' + msg.inspect
 			write_to_stream msg
@@ -538,18 +544,22 @@ module SGXcatapult
 
 		# respond to capabilities request for sgx-catapult itself
 		msg = i.reply
-		msg.identities = [{:name =>
-			'Soprani.ca Gateway to XMPP - Catapult',
-			:type => 'sms-ctplt', :category => 'gateway'}]
-		msg.features = ["jabber:iq:register",
-			"jabber:iq:gateway", "jabber:iq:private",
+		msg.identities = [{
+			name: 'Soprani.ca Gateway to XMPP - Catapult',
+			type: 'sms-ctplt', category: 'gateway'
+		}]
+		msg.features = [
+			"jabber:iq:register",
+			"jabber:iq:gateway",
+			"jabber:iq:private",
 			"http://jabber.org/protocol/disco#info",
 			"http://jabber.org/protocol/commands",
-			"http://jabber.org/protocol/muc"]
+			"http://jabber.org/protocol/muc"
+		]
 		write_to_stream msg
 	end
 
-	iq '/iq/ns:query', :ns => 'jabber:iq:register' do |i, qn|
+	iq '/iq/ns:query', ns: 'jabber:iq:register' do |i, qn|
 		puts "IQ: #{i.inspect}"
 
 		if i.type == :set
@@ -561,19 +571,24 @@ module SGXcatapult
 			phone_num = ''
 
 			if xn.nil?
-				user_id = qn.children.find {
-					|v| v.element_name == "nick" }
-				api_token = qn.children.find {
-					|v| v.element_name == "username" }
-				api_secret = qn.children.find {
-					|v| v.element_name == "password" }
-				phone_num = qn.children.find {
-					|v| v.element_name == "phone" }
+				user_id = qn.children.find { |v|
+					v.element_name == "nick"
+				}
+				api_token = qn.children.find { |v|
+					v.element_name == "username"
+				}
+				api_secret = qn.children.find { |v|
+					v.element_name == "password"
+				}
+				phone_num = qn.children.find { |v|
+					v.element_name == "phone"
+				}
 			else
-				for field in xn.children
+				xn.children.each do |field|
 					if field.element_name == "field"
 						val = field.children.find { |v|
-						v.element_name == "value" }
+							v.element_name == "value"
+						}
 
 						case field['var']
 						when 'nick'
@@ -594,8 +609,10 @@ module SGXcatapult
 
 			if phone_num[0] != '+'
 				# TODO: add text re number not (yet) supported
-				write_to_stream error_msg(i.reply, qn, :cancel,
-					'item-not-found')
+				write_to_stream error_msg(
+					i.reply, qn, :cancel,
+					'item-not-found'
+				)
 				next
 			end
 
@@ -657,14 +674,14 @@ module SGXcatapult
 						next
 					end
 
-					conn.write ["RPUSH",cred_key,user_id]
-					conn.write ["RPUSH",cred_key,api_token]
-					conn.write ["RPUSH",cred_key,api_secret]
-					conn.write ["RPUSH",cred_key,phone_num]
+					conn.write ["RPUSH", cred_key, user_id]
+					conn.write ["RPUSH", cred_key, api_token]
+					conn.write ["RPUSH", cred_key, api_secret]
+					conn.write ["RPUSH", cred_key, phone_num]
 
 					# TODO: confirm cred_key list size == 4
 
-					for n in 1..4 do
+					(1..4).each do |n|
 						# TODO: catch/relay RuntimeError
 						result = conn.read
 						if result != n
@@ -683,21 +700,29 @@ module SGXcatapult
 					write_to_stream i.reply
 				else
 					# TODO: add text re number disabled
-					write_to_stream error_msg(i.reply, qn,
-						:modify, 'not-acceptable')
+					write_to_stream error_msg(
+						i.reply, qn,
+						:modify, 'not-acceptable'
+					)
 				end
 			elsif response.code == '401'
 				# TODO: add text re bad credentials
-				write_to_stream error_msg(i.reply, qn, :auth,
-					'not-authorized')
+				write_to_stream error_msg(
+					i.reply, qn, :auth,
+					'not-authorized'
+				)
 			elsif response.code == '404'
 				# TODO: add text re number not found or disabled
-				write_to_stream error_msg(i.reply, qn, :cancel,
-					'item-not-found')
+				write_to_stream error_msg(
+					i.reply, qn, :cancel,
+					'item-not-found'
+				)
 			else
 				# TODO: add text re misc error, and mention code
-				write_to_stream error_msg(i.reply, qn, :modify,
-					'not-acceptable')
+				write_to_stream error_msg(
+					i.reply, qn, :modify,
+					'not-acceptable'
+				)
 			end
 
 		elsif i.type == :get
@@ -712,27 +737,29 @@ module SGXcatapult
 			existing_number = conn.read
 			conn.disconnect
 
-			msg = Nokogiri::XML::Node.new 'query',orig.document
+			msg = Nokogiri::XML::Node.new 'query', orig.document
 			msg['xmlns'] = 'jabber:iq:register'
 
 			if existing_number
-				msg.add_child(Nokogiri::XML::Node.new('registered', msg.document))
+				msg.add_child(
+					Nokogiri::XML::Node.new('registered', msg.document)
+				)
 			end
 
-			n1 = Nokogiri::XML::Node.new 'instructions',msg.document
-			n1.content= "Enter the information from your Account " +
-				"page as well as the Phone Number\nin your " +
-				"account you want to use (ie. '+12345678901')" +
-				".\nUser Id is nick, API Token is username, " +
-				"API Secret is password, Phone Number is phone"+
-				".\n\nThe source code for this gateway is at " +
-				"https://gitlab.com/ossguy/sgx-catapult ." +
-				"\nCopyright (C) 2017  Denver Gingerich and " +
+			n1 = Nokogiri::XML::Node.new 'instructions', msg.document
+			n1.content= "Enter the information from your Account "\
+				"page as well as the Phone Number\nin your "\
+				"account you want to use (ie. '+12345678901')"\
+				".\nUser Id is nick, API Token is username, "\
+				"API Secret is password, Phone Number is phone"\
+				".\n\nThe source code for this gateway is at "\
+				"https://gitlab.com/ossguy/sgx-catapult ."\
+				"\nCopyright (C) 2017  Denver Gingerich and "\
 				"others, licensed under AGPLv3+."
-			n2 = Nokogiri::XML::Node.new 'nick',msg.document
-			n3 = Nokogiri::XML::Node.new 'username',msg.document
-			n4 = Nokogiri::XML::Node.new 'password',msg.document
-			n5 = Nokogiri::XML::Node.new 'phone',msg.document
+			n2 = Nokogiri::XML::Node.new 'nick', msg.document
+			n3 = Nokogiri::XML::Node.new 'username', msg.document
+			n4 = Nokogiri::XML::Node.new 'password', msg.document
+			n5 = Nokogiri::XML::Node.new 'phone', msg.document
 			n5.content = existing_number.to_s
 			msg.add_child(n1)
 			msg.add_child(n2)
@@ -741,24 +768,32 @@ module SGXcatapult
 			msg.add_child(n5)
 
 			x = Blather::Stanza::X.new :form, [
-				{:required => true, :type => :"text-single",
-				:label => 'User Id', :var => 'nick'},
-				{:required => true, :type => :"text-single",
-				:label => 'API Token', :var => 'username'},
-				{:required => true, :type => :"text-private",
-				:label => 'API Secret', :var => 'password'},
-				{:required => true, :type => :"text-single",
-				:label => 'Phone Number', :var => 'phone',
-				:value => existing_number.to_s}
+				{
+					required: true, type: :"text-single",
+					label: 'User Id', var: 'nick'
+				},
+				{
+					required: true, type: :"text-single",
+					label: 'API Token', var: 'username'
+				},
+				{
+					required: true, type: :"text-private",
+					label: 'API Secret', var: 'password'
+				},
+				{
+					required: true, type: :"text-single",
+					label: 'Phone Number', var: 'phone',
+					value: existing_number.to_s
+				}
 			]
-			x.title= 'Register for ' +
+			x.title= 'Register for '\
 				'Soprani.ca Gateway to XMPP - Catapult'
-			x.instructions= "Enter the details from your Account " +
-				"page as well as the Phone Number\nin your " +
-				"account you want to use (ie. '+12345678901')" +
-				".\n\nThe source code for this gateway is at " +
-				"https://gitlab.com/ossguy/sgx-catapult ." +
-				"\nCopyright (C) 2017  Denver Gingerich and " +
+			x.instructions= "Enter the details from your Account "\
+				"page as well as the Phone Number\nin your "\
+				"account you want to use (ie. '+12345678901')"\
+				".\n\nThe source code for this gateway is at "\
+				"https://gitlab.com/ossguy/sgx-catapult ."\
+				"\nCopyright (C) 2017  Denver Gingerich and "\
 				"others, licensed under AGPLv3+."
 			msg.add_child(x)
 
@@ -848,7 +883,7 @@ class WebhookHandler < Goliath::API
 
 		if others_num[0] != '+'
 			# TODO: check that others_num actually a shortcode first
-			others_num = others_num +
+			others_num +=
 				';phone-context=ca-us.phone-context.soprani.ca'
 		end
 
@@ -882,31 +917,34 @@ class WebhookHandler < Goliath::API
 			when 'mms'
 				has_media = false
 				params['media'].each do |media_url|
-					if not media_url.end_with?('.smil',
-						'.txt', '.xml')
+					if not media_url.end_with?(
+						'.smil', '.txt', '.xml'
+					)
 
 						has_media = true
-						send_media(others_num + '@' +
+						send_media(
+							others_num + '@' +
 							ARGV[0],
-							bare_jid, media_url)
+							bare_jid, media_url
+						)
 					end
 				end
 
 				if params['text'].empty?
 					if not has_media
-						text = '[suspected group msg ' +
+						text = '[suspected group msg '\
 							'with no text (odd)]'
 					end
 				else
-					if has_media
+					text = if has_media
 						# TODO: write/use a caption XEP
-						text = params['text']
+						params['text']
 					else
-						text = '[suspected group msg ' +
-							'(recipient list not ' +
-							'available) with ' +
-							'following text] ' +
-							params['text']
+						'[suspected group msg '\
+						'(recipient list not '\
+						'available) with '\
+						'following text] ' +
+						params['text']
 					end
 				end
 
@@ -920,10 +958,10 @@ class WebhookHandler < Goliath::API
 
 				return [200, {}, "OK"]
 			else
-				text = "unknown type (#{params['eventType']})" +
+				text = "unknown type (#{params['eventType']})"\
 					" with text: " + params['text']
 
-				# TODO log/notify of this properly
+				# TODO: log/notify of this properly
 				puts text
 			end
 
@@ -942,8 +980,11 @@ class WebhookHandler < Goliath::API
 				msg['id'] = id
 
 				# create an error reply to the bare message
-				msg = Blather::StanzaError.new(msg,
-					'recipient-unavailable', :wait).to_node
+				msg = Blather::StanzaError.new(
+					msg,
+					'recipient-unavailable',
+					:wait
+				).to_node
 			when 'delivered'
 				msg = ReceiptMessage.new(bare_jid)
 
@@ -952,8 +993,10 @@ class WebhookHandler < Goliath::API
 				msg['id'] = uuid_gen.generate
 
 				# TODO: send only when requested per XEP-0184
-				rcvd = Nokogiri::XML::Node.new 'received',
+				rcvd = Nokogiri::XML::Node.new(
+					'received',
 					msg.document
+				)
 				rcvd['xmlns'] = 'urn:xmpp:receipts'
 				rcvd['id'] = id
 				msg.add_child(rcvd)
@@ -963,7 +1006,7 @@ class WebhookHandler < Goliath::API
 				return [200, {}, "OK"]
 			else
 				# TODO: notify somehow of unknown state receivd?
-				puts "message with id #{id} has " +
+				puts "message with id #{id} has "\
 					"other state #{params['deliveryState']}"
 				return [200, {}, "OK"]
 			end

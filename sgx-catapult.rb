@@ -33,7 +33,7 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.030\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.031\n\n"
 
 if ARGV.size != 9 then
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> " +
@@ -646,7 +646,7 @@ module SGXcatapult
 					end
 
 					conn.write ["SET", jid_key, bare_jid]
-					if conn.read != 1
+					if conn.read != 'OK'
 						conn.disconnect
 
 						# TODO: catch/relay RuntimeError

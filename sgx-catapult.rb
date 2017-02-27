@@ -33,7 +33,8 @@ require 'log4r'
 
 $stdout.sync = true
 
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult        v0.031\n\n"
+puts "Soprani.ca/SMS Gateway for XMPP - Catapult\n"\
+	"==>> last commit of this version is " + `git rev-parse HEAD` + "\n"
 
 if ARGV.size != 9
 	puts "Usage: sgx-catapult.rb <component_jid> <component_password> "\

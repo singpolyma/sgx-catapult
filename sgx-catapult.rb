@@ -572,29 +572,41 @@ module SGXcatapult
 		conn = Hiredis::Connection.new
 		conn.connect(ARGV[4], ARGV[5].to_i)
 
-		# TODO: use SETNX instead
-		conn.write ["EXISTS", jid_key]
-		if conn.read == 1
+		conn.write ["GET", jid_key]
+		existing_jid = conn.read
+
+		if not existing_jid.nil? and existing_jid != bare_jid
 			conn.disconnect
 
-			# TODO: add txt re num exists
+			# TODO: add/log text re credentials exist already
 			write_to_stream error_msg(
 				i.reply, qn, :cancel,
 				'conflict')
 			return false
 		end
+
+		# ASSERT: existing_jid is nil or equal to bare_jid
 
 		conn.write ["EXISTS", cred_key]
-		if conn.read == 1
-			conn.disconnect
+		creds_exist = conn.read
+		if 1 == creds_exist
+			conn.write ["LRANGE", cred_key, 0, 3]
+			if [user_id, api_token, api_secret, phone_num] !=
+				conn.read
 
-			# TODO: add txt re already exist
-			write_to_stream error_msg(
-				i.reply, qn, :cancel,
-				'conflict')
-			return false
+				conn.disconnect
+
+				# TODO: add/log txt re credentials exist already
+				write_to_stream error_msg(
+					i.reply, qn, :cancel,
+					'conflict')
+				return false
+			end
 		end
 
+		# ASSERT: cred_key does not exist or its value equals input vals
+
+		# not necessary if existing_jid non-nil, but easier to do anyway
 		conn.write ["SET", jid_key, bare_jid]
 		if conn.read != 'OK'
 			conn.disconnect
@@ -605,6 +617,13 @@ module SGXcatapult
 				i.reply, qn, :cancel,
 				'internal-server-error')
 			return false
+		end
+
+		if 1 == creds_exist
+			# per above ASSERT, cred_key value equals input already
+			conn.disconnect
+			write_to_stream i.reply
+			return true
 		end
 
 		conn.write ["RPUSH", cred_key, user_id]

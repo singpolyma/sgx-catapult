@@ -560,6 +560,79 @@ module SGXcatapult
 		write_to_stream msg
 	end
 
+	def self.check_then_register(user_id, api_token, api_secret, phone_num,
+		i, qn)
+
+		jid_key = "catapult_jid-" + phone_num
+
+		bare_jid = i.from.to_s.split('/', 2)[0]
+		cred_key = "catapult_cred-" + bare_jid
+
+		# TODO: pre-validate ARGV[5] is integer
+		conn = Hiredis::Connection.new
+		conn.connect(ARGV[4], ARGV[5].to_i)
+
+		# TODO: use SETNX instead
+		conn.write ["EXISTS", jid_key]
+		if conn.read == 1
+			conn.disconnect
+
+			# TODO: add txt re num exists
+			write_to_stream error_msg(
+				i.reply, qn, :cancel,
+				'conflict')
+			return false
+		end
+
+		conn.write ["EXISTS", cred_key]
+		if conn.read == 1
+			conn.disconnect
+
+			# TODO: add txt re already exist
+			write_to_stream error_msg(
+				i.reply, qn, :cancel,
+				'conflict')
+			return false
+		end
+
+		conn.write ["SET", jid_key, bare_jid]
+		if conn.read != 'OK'
+			conn.disconnect
+
+			# TODO: catch/relay RuntimeError
+			# TODO: add txt re push failure
+			write_to_stream error_msg(
+				i.reply, qn, :cancel,
+				'internal-server-error')
+			return false
+		end
+
+		conn.write ["RPUSH", cred_key, user_id]
+		conn.write ["RPUSH", cred_key, api_token]
+		conn.write ["RPUSH", cred_key, api_secret]
+		conn.write ["RPUSH", cred_key, phone_num]
+
+		# TODO: confirm cred_key list size == 4
+
+		(1..4).each do |n|
+			# TODO: catch/relay RuntimeError
+			result = conn.read
+			if result != n
+				conn.disconnect
+
+				write_to_stream error_msg(
+					i.reply, qn, :cancel,
+					'internal-server-error')
+				return false
+			end
+		end
+		conn.disconnect
+
+		write_to_stream i.reply
+
+		return true
+	end
+
 	iq '/iq/ns:query', ns: 'jabber:iq:register' do |i, qn|
 		puts "IQ: #{i.inspect}"
 
@@ -631,74 +704,12 @@ module SGXcatapult
 			if response.code == '200'
 				params = JSON.parse response.body
 				if params['numberState'] == 'enabled'
-					jid_key = "catapult_jid-" + phone_num
-
-					bare_jid = i.from.to_s.split('/', 2)[0]
-					cred_key = "catapult_cred-" + bare_jid
-
-					# TODO: pre-validate ARGV[5] is integer
-					conn = Hiredis::Connection.new
-					conn.connect(ARGV[4], ARGV[5].to_i)
-
-					# TODO: use SETNX instead
-					conn.write ["EXISTS", jid_key]
-					if conn.read == 1
-						conn.disconnect
-
-						# TODO: add txt re num exists
-						write_to_stream error_msg(
-							i.reply, qn, :cancel,
-							'conflict')
+					if not check_then_register(
+						user_id, api_token, api_secret,
+						phone_num, i, qn
+					)
 						next
 					end
-
-					conn.write ["EXISTS", cred_key]
-					if conn.read == 1
-						conn.disconnect
-
-						# TODO: add txt re already exist
-						write_to_stream error_msg(
-							i.reply, qn, :cancel,
-							'conflict')
-						next
-					end
-
-					conn.write ["SET", jid_key, bare_jid]
-					if conn.read != 'OK'
-						conn.disconnect
-
-						# TODO: catch/relay RuntimeError
-						# TODO: add txt re push failure
-						write_to_stream error_msg(
-							i.reply, qn, :cancel,
-							'internal-server-error')
-						next
-					end
-
-					conn.write ["RPUSH", cred_key, user_id]
-					conn.write ["RPUSH", cred_key, api_token]
-					conn.write ["RPUSH", cred_key, api_secret]
-					conn.write ["RPUSH", cred_key, phone_num]
-
-					# TODO: confirm cred_key list size == 4
-
-					(1..4).each do |n|
-						# TODO: catch/relay RuntimeError
-						result = conn.read
-						if result != n
-							conn.disconnect
-
-							write_to_stream(
-							error_msg(
-							i.reply, qn, :cancel,
-							'internal-server-error')
-							)
-							next
-						end
-					end
-					conn.disconnect
-
-					write_to_stream i.reply
 				else
 					# TODO: add text re number disabled
 					write_to_stream error_msg(

@@ -70,9 +70,8 @@ class WebhookHandler < Goliath::API
 			]
 		end
 
-		conn.write ["LRANGE", cred_key, 0, 3]
-		# we don't actually use users_num, but easier to read so left in
-		user_id, api_token, api_secret, users_num = conn.read
+		conn.write ["LRANGE", cred_key, 0, 2]
+		user_id, api_token, api_secret = conn.read
 		conn.disconnect
 
 		uri = URI.parse('https://api.catapult.inetwork.com')

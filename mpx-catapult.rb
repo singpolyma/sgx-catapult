@@ -19,7 +19,8 @@
 
 $stdout.sync = true
 
-puts "Soprani.ca/MMS Proxy for XMPP - Catapult        v0.005\n\n"
+puts "Soprani.ca/MMS Proxy for XMPP - Catapult\n"\
+	"==>> last commit of this version is " + `git rev-parse HEAD` + "\n"
 
 require 'goliath'
 require 'net/http'

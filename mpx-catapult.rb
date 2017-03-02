@@ -26,6 +26,7 @@ require 'goliath'
 require 'net/http'
 require 'redis/connection/hiredis'
 require 'uri'
+require 'webrick'
 
 if ARGV.size != 3
 	puts "Usage: mpx-catapult.rb <http_listen_port> "\
@@ -43,7 +44,8 @@ class WebhookHandler < Goliath::API
 		puts 'method: ' + env['REQUEST_METHOD']
 		puts 'BODY: ' + Rack::Request.new(env).body.read
 
-		cred_key = "catapult_cred-"+env['REQUEST_PATH'].split('/', 3)[1]
+		cred_key = "catapult_cred-" + WEBrick::HTTPUtils.unescape(
+			env['REQUEST_PATH'].split('/', 3)[1])
 
 		# TODO: connect at start of program instead
 		conn = Hiredis::Connection.new

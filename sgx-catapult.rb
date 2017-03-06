@@ -175,9 +175,9 @@ module SGXcatapult
 			'text'			=> m.body,
 			'tag'			=>
 				# callbacks need both the id and resourcepart
-				WEBrick::HTTPUtils.escape(m.id) + ' ' +
+				WEBrick::HTTPUtils.escape(m.id.to_s) + ' ' +
 				WEBrick::HTTPUtils.escape(
-					m.from.to_s.split('/', 2)[1]
+					m.from.to_s.split('/', 2)[1].to_s
 				),
 			'receiptRequested'	=> 'all',
 			'callbackUrl'		=> ARGV[6]

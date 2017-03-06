@@ -477,9 +477,9 @@ module SGXcatapult
 			],
 			'tag'			=>
 				# callbacks need both the id and resourcepart
-				WEBrick::HTTPUtils.escape(i.id) + ' ' +
+				WEBrick::HTTPUtils.escape(i.id.to_s) + ' ' +
 				WEBrick::HTTPUtils.escape(
-					i.from.to_s.split('/', 2)[1]
+					i.from.to_s.split('/', 2)[1].to_s
 				)
 			# TODO: add back when Bandwidth AP supports it (?); now:
 			#  "The ''messages'' resource property

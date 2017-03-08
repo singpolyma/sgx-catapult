@@ -2,7 +2,7 @@ Metrics/LineLength:
   Max: 80
 
 Style/Tab:
-   Enabled: false
+  Enabled: false
 
 Style/IndentationWidth:
   Width: 1 # one tab

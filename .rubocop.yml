@@ -10,6 +10,9 @@ Style/IndentationWidth:
 Lint/EndAlignment:
   EnforcedStyleAlignWith: variable
 
+Lint/RescueException:
+  Enabled: false
+
 Metrics/AbcSize:
   Max: 111
 

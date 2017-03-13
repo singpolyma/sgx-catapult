@@ -1095,7 +1095,7 @@ class WebhookHandler < Goliath::API
 
 			msg = Blather::Stanza::Message.new(bare_jid, text)
 		else # per prior switch, this is:  params['direction'] == 'out'
-			tag_parts = params['tag'].split(' ', 2)
+			tag_parts = params['tag'].split(/ /, 2)
 			id = WEBrick::HTTPUtils.unescape(tag_parts[0])
 			resourcepart = WEBrick::HTTPUtils.unescape(tag_parts[1])
 

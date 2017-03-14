@@ -740,6 +740,12 @@ module SGXcatapult
 		puts "IQ: #{i.inspect}"
 
 		if i.type == :set
+			rn = qn.children.find { |v| v.element_name == "remove" }
+			if not rn.nil?
+				puts "received <remove/> - ignoring for now..."
+				next
+			end
+
 			xn = qn.children.find { |v| v.element_name == "x" }
 
 			user_id = ''

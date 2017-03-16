@@ -19,6 +19,7 @@
 # with sgx-catapult.  If not, see <http://www.gnu.org/licenses/>.
 
 require 'blather/client/dsl'
+require 'em-http-request'
 require 'json'
 require 'net/http'
 require 'redis/connection/hiredis'
@@ -30,6 +31,8 @@ require 'webrick'
 require 'goliath/api'
 require 'goliath/server'
 require 'log4r'
+
+require_relative 'em_promise'
 
 $stdout.sync = true
 
@@ -47,6 +50,14 @@ end
 t = Time.now
 puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
 
+def panic(e)
+	puts "Shutting down gateway due to exception: #{e.message}"
+	puts e.backtrace
+	SGXcatapult.shutdown
+	puts 'Gateway has terminated.'
+	EM.stop
+end
+
 module SGXcatapult
 	extend Blather::DSL
 
@@ -63,7 +74,7 @@ module SGXcatapult
 		client.write(stanza)
 	end
 
-	def self.error_msg(orig, query_node, type, name, text = nil)
+	def self.error_msg(orig, query_node, type, name, text=nil)
 		if not query_node.nil?
 			orig.add_child(query_node)
 			orig.type = :error
@@ -169,39 +180,39 @@ module SGXcatapult
 
 		conn.disconnect
 
-		uri = URI.parse('https://api.catapult.inetwork.com')
-		http = Net::HTTP.new(uri.host, uri.port)
-		http.use_ssl = true
-		request = Net::HTTP::Post.new('/v1/users/' + user_id +
-			'/messages')
-		request.basic_auth api_token, api_secret
-		request.add_field('Content-Type', 'application/json')
-		request.body = JSON.dump(
-			'from'			=> users_num,
-			'to'			=> num_dest,
-			'text'			=> m.body,
-			'tag'			=>
-				# callbacks need both the id and resourcepart
-				WEBrick::HTTPUtils.escape(m.id.to_s) + ' ' +
-				WEBrick::HTTPUtils.escape(
-					m.from.to_s.split('/', 2)[1].to_s
-				),
-			'receiptRequested'	=> 'all',
-			'callbackUrl'		=> ARGV[6]
-		)
-		response = http.request(request)
-
-		puts 'API response to send: ' + response.to_s + ' with code ' +
-			response.code + ', body "' + response.body + '"'
-
-		if response.code != '201'
-			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(
-				m.reply, m.body, :cancel,
-				'internal-server-error'
+		EM::HttpRequest.new(
+			"https://api.catapult.inetwork.com/"\
+			"v1/users/#{user_id}/messages"
+		).post(
+			head: {
+				'Authorization' => [api_token, api_secret],
+				'Content-Type' => 'application/json'
+			},
+			body: JSON.dump(
+				from:             users_num,
+				to:               num_dest,
+				text:             m.body,
+				tag:
+					# callbacks need both the id and resourcepart
+					WEBrick::HTTPUtils.escape(m.id.to_s) + ' ' +
+					WEBrick::HTTPUtils.escape(
+						m.from.to_s.split('/', 2)[1].to_s
+					),
+				receiptRequested: 'all',
+				callbackUrl:      ARGV[6]
 			)
-			next
-		end
+		).then { |http|
+			puts "API response to send: #{http.response} with code "\
+				"response.code #{http.response_header.status}"
+
+			if http.response_header.status != 201
+				# TODO: add text re unexpected code; mention code number
+				write_to_stream error_msg(
+					m.reply, m.body, :cancel,
+					'internal-server-error'
+				)
+			end
+		}.catch(&method(:panic))
 
 	rescue Exception => e
 		puts 'Shutting down gateway due to exception 001: ' + e.message
@@ -950,7 +961,7 @@ end
 end
 
 class ReceiptMessage < Blather::Stanza
-	def self.new(to = nil)
+	def self.new(to=nil)
 		node = super :message
 		node.to = to
 		node

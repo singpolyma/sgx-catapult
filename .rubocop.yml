@@ -93,3 +93,9 @@ Style/NegatedIf:
 
 Style/RedundantReturn:
   Enabled: false
+
+Style/MultilineBlockChain:
+  Enabled: false
+
+Style/SpaceAroundEqualsInParameterDefault:
+  EnforcedStyle: no_space

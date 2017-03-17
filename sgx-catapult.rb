@@ -19,6 +19,7 @@
 # with sgx-catapult.  If not, see <http://www.gnu.org/licenses/>.
 
 require 'blather/client/dsl'
+require 'em-hiredis'
 require 'em-http-request'
 require 'json'
 require 'net/http'
@@ -56,6 +57,11 @@ def panic(e)
 	SGXcatapult.shutdown
 	puts 'Gateway has terminated.'
 	EM.stop
+end
+
+def extract_shortcode(dest)
+	num, context = dest.split(';', 2)
+	num if context && context == 'phone-context=ca-us.phone-context.soprani.ca'
 end
 
 module SGXcatapult
@@ -101,92 +107,41 @@ module SGXcatapult
 
 	setup ARGV[0], ARGV[1], ARGV[2], ARGV[3]
 
-	message :chat?, :body do |m|
-	begin
-		num_dest = m.to.to_s.split('@', 2)[0]
+	def self.pass_on_message(m, jid)
+		# setup delivery receipt; similar to a reply
+		rcpt = ReceiptMessage.new(m.from.stripped)
+		rcpt.from = m.to
 
-		if num_dest[0] != '+'
-			# check to see if a valid shortcode context is specified
-			num_and_context = num_dest.split(';', 2)
-			if num_and_context[1] and num_and_context[1] ==
-				'phone-context=ca-us.phone-context.soprani.ca'
+		# pass original message (before sending receipt)
+		m.to = jid
+		m.from = "#{users_num}@#{ARGV[0]}"
 
-				# TODO: check if num_dest is fully numeric
-				num_dest = num_and_context[0]
-			else
-				# TODO: text re num not (yet) supportd/implmentd
-				write_to_stream error_msg(
-					m.reply, m.body,
-					:cancel, 'item-not-found'
-				)
-				next
-			end
-		end
+		puts 'XRESPONSE0: ' + m.inspect
+		write_to_stream m
 
-		bare_jid = m.from.to_s.split('/', 2)[0]
-		cred_key = "catapult_cred-" + bare_jid
+		# send a delivery receipt back to the sender
+		# TODO: send only when requested per XEP-0184
+		# TODO: pass receipts from target if supported
 
-		conn = Hiredis::Connection.new
-		conn.connect(ARGV[4], ARGV[5].to_i)
+		# TODO: put in member/instance variable
+		rcpt['id'] = SecureRandom.uuid
+		rcvd = Nokogiri::XML::Node.new 'received', rcpt.document
+		rcvd['xmlns'] = 'urn:xmpp:receipts'
+		rcvd['id'] = m.id
+		rcpt.add_child(rcvd)
 
-		conn.write ["EXISTS", cred_key]
-		if conn.read == 0
-			conn.disconnect
+		puts 'XRESPONSE1: ' + rcpt.inspect
+		write_to_stream rcpt
+	end
 
-			# TODO: add text re credentials not being registered
-			write_to_stream error_msg(
-				m.reply, m.body, :auth,
-				'registration-required'
-			)
-			next
-		end
-
-		conn.write ["LRANGE", cred_key, 0, 3]
-		user_id, api_token, api_secret, users_num = conn.read
-
-		# if the destination user is in the system just pass on directly
-		jid_key = "catapult_jid-" + num_dest
-		conn.write ["EXISTS", jid_key]
-		if conn.read > 0
-			# setup delivery receipt; sort of a reply but not quite
-			rcpt = ReceiptMessage.new(bare_jid)
-			rcpt.from = m.to
-
-			# pass on the original message (before sending receipt)
-			conn.write ["GET", jid_key]
-			m.to = conn.read
-
-			m.from = users_num + '@' + ARGV[0]
-
-			puts 'XRESPONSE0: ' + m.inspect
-			write_to_stream m
-
-			# send a delivery receipt back to the sender
-			# TODO: send only when requested per XEP-0184
-
-			# TODO: put in member/instance variable
-			rcpt['id'] = SecureRandom.uuid
-			rcvd = Nokogiri::XML::Node.new 'received', rcpt.document
-			rcvd['xmlns'] = 'urn:xmpp:receipts'
-			rcvd['id'] = m.id
-			rcpt.add_child(rcvd)
-
-			puts 'XRESPONSE1: ' + rcpt.inspect
-			write_to_stream rcpt
-
-			conn.disconnect
-			next
-		end
-
-		conn.disconnect
-
+	def self.to_catapult(m, num_dest, user_id, token, secret, users_num)
 		EM::HttpRequest.new(
 			#"https://api.catapult.inetwork.com/"\
 			"http://localhost:4567/"\
 			"v1/users/#{user_id}/messages"
 		).post(
 			head: {
-				'Authorization' => [api_token, api_secret],
+				'Authorization' => [token, secret],
 				'Content-Type' => 'application/json'
 			},
 			body: JSON.dump(
@@ -194,33 +149,68 @@ module SGXcatapult
 				to:               num_dest,
 				text:             m.body,
 				tag:
-					# callbacks need both the id and resourcepart
-					WEBrick::HTTPUtils.escape(m.id.to_s) + ' ' +
+					# callbacks need id and resourcepart
+					WEBrick::HTTPUtils.escape(m.id.to_s) +
+					' ' +
 					WEBrick::HTTPUtils.escape(
-						m.from.to_s.split('/', 2)[1].to_s
+						m.from.resource.to_s
 					),
 				receiptRequested: 'all',
 				callbackUrl:      ARGV[6]
 			)
 		).then { |http|
-			puts "API response to send: #{http.response} with code "\
-				"response.code #{http.response_header.status}"
+			puts "API response to send: #{http.response} with code"\
+				" response.code #{http.response_header.status}"
 
 			if http.response_header.status != 201
-				# TODO: add text re unexpected code; mention code number
-				write_to_stream error_msg(
-					m.reply, m.body, :cancel,
-					'internal-server-error'
+				# TODO: add text; mention code number
+				EMPromise.reject(
+					[:cancel, 'internal-server-error']
 				)
 			end
-		}.catch(&method(:panic))
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 001: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
+		}
 	end
+
+	message :chat?, :body do |m|
+		EMPromise.resolve(m.to.node.to_s).then { |num_dest|
+			if num_dest =~ /\A\+?[0-9]+(?:;.*)?\Z/
+				next num_dest if num_dest[0] == '+'
+				shortcode = extract_shortcode(num_dest)
+				next shortcode if shortcode
+			end
+			# TODO: text re num not (yet) supportd/implmentd
+			EMPromise.reject([:cancel, 'item-not-found'])
+		}.then { |num_dest|
+			cred_key = "catapult_cred-#{m.from.stripped}"
+			REDIS.lrange(cred_key, 0, 3).then { |creds|
+				[num_dest] + creds
+			}
+		}.then { |(num_dest, *creds)|
+			if creds.length < 4
+				# TODO: add text re credentials not registered
+				EMPromise.reject(
+					[:auth, 'registration-required']
+				)
+			else
+				jid_key = "catapult_jid-#{num_dest}"
+				REDIS.get(jid_key).then { |jid|
+					[jid, num_dest] + creds
+				}
+			end
+		}.then { |(jid, num_dest, *creds)|
+			# if destination user is in the system pass on directly
+			if jid
+				pass_on_message(m, jid)
+			else
+				to_catapult(m, num_dest, *creds)
+			end
+		}.catch { |e|
+			if e.is_a?(Array) && e.length == 2
+				write_to_stream error_msg(m.reply, m.body, *e)
+			else
+				EMPromise.reject(e)
+			end
+		}.catch(&method(:panic))
 	end
 
 	def self.user_cap_identities
@@ -1173,6 +1163,8 @@ class WebhookHandler < Goliath::API
 end
 
 EM.run do
+	REDIS = EM::Hiredis.connect("redis://#{ARGV[4]}:#{ARGV[5]}/0")
+
 	SGXcatapult.run
 
 	# required when using Prosody otherwise disconnects on 6-hour inactivity

@@ -960,21 +960,16 @@ class WebhookHandler < Goliath::API
 			return [200, {}, "OK"]
 		end
 
-		jid_key = "catapult_jid-" + users_num
-
 		if others_num[0] != '+'
 			# TODO: check that others_num actually a shortcode first
 			others_num +=
 				';phone-context=ca-us.phone-context.soprani.ca'
 		end
 
-		conn = Hiredis::Connection.new
-		conn.connect(ARGV[4], ARGV[5].to_i)
+		jid_key = "catapult_jid-#{users_num}"
+		bare_jid = REDIS.get(jid_key).promise.sync
 
-		conn.write ["EXISTS", jid_key]
-		if conn.read == 0
-			conn.disconnect
-
+		if !bare_jid
 			puts "jid_key (#{jid_key}) DNE; Catapult misconfigured?"
 
 			# TODO: likely not appropriate; give error to Catapult?
@@ -983,10 +978,6 @@ class WebhookHandler < Goliath::API
 			#	'registration-required')
 			return [200, {}, "OK"]
 		end
-
-		conn.write ["GET", jid_key]
-		bare_jid = conn.read
-		conn.disconnect
 
 		msg = ''
 		case params['direction']

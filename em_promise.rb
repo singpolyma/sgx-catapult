@@ -20,6 +20,16 @@ class EMPromise < Promise
 		EM.next_tick { yield }
 	end
 
+	def wait
+		fiber = Fiber.current
+		resume = proc do |arg|
+			defer { fiber.resume(arg) }
+		end
+
+		self.then(resume, resume)
+		Fiber.yield
+	end
+
 	def self.reject(e)
 		new.tap { |promise| promise.reject(e) }
 	end

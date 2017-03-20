@@ -35,7 +35,7 @@ Metrics/ModuleLength:
   Max: 1000
 
 Metrics/ParameterLists:
-  Max: 6
+  Max: 7
 
 Metrics/PerceivedComplexity:
   Max: 20
@@ -99,3 +99,9 @@ Style/MultilineBlockChain:
 
 Style/SpaceAroundEqualsInParameterDefault:
   EnforcedStyle: no_space
+
+Style/IndentArray:
+  EnforcedStyle: consistent
+
+Style/FirstParameterIndentation:
+  EnforcedStyle: consistent

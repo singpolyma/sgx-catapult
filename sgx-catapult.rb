@@ -134,34 +134,22 @@ module SGXcatapult
 		write_to_stream rcpt
 	end
 
-	def self.to_catapult(m, num_dest, user_id, token, secret, users_num)
+	def self.call_catapult(token, secret, m, pth, body, head={}, code=[200])
 		EM::HttpRequest.new(
-			"https://api.catapult.inetwork.com/"\
-			"v1/users/#{user_id}/messages"
-		).post(
+			"https://api.catapult.inetwork.com/#{pth}"
+		).public_send(
+			m,
 			head: {
-				'Authorization' => [token, secret],
-				'Content-Type' => 'application/json'
-			},
-			body: JSON.dump(
-				from:             users_num,
-				to:               num_dest,
-				text:             m.body,
-				tag:
-					# callbacks need id and resourcepart
-					WEBrick::HTTPUtils.escape(m.id.to_s) +
-					' ' +
-					WEBrick::HTTPUtils.escape(
-						m.from.resource.to_s
-					),
-				receiptRequested: 'all',
-				callbackUrl:      ARGV[6]
-			)
+				'Authorization' => [token, secret]
+			}.merge(head),
+			body: body
 		).then { |http|
 			puts "API response to send: #{http.response} with code"\
 				" response.code #{http.response_header.status}"
 
-			if http.response_header.status != 201
+			if code.include?(http.response_header.status)
+				http.response
+			else
 				# TODO: add text; mention code number
 				EMPromise.reject(
 					[:cancel, 'internal-server-error']
@@ -170,8 +158,42 @@ module SGXcatapult
 		}
 	end
 
-	message :chat?, :body do |m|
-		EMPromise.resolve(m.to.node.to_s).then { |num_dest|
+	def self.to_catapult(s, murl, num_dest, user_id, token, secret, usern)
+		extra = if murl
+			{
+				media: murl
+			}
+		else
+			{
+				receiptRequested: 'all',
+				callbackUrl:      ARGV[6]
+			}
+		end
+
+		call_catapult(
+			token,
+			secret,
+			:post,
+			"v1/users/#{user_id}/messages",
+			JSON.dump(extra.merge(
+				from: usern,
+				to:   num_dest,
+				text: s.respond_to?(:body) ? s.body : '',
+				tag:
+					# callbacks need id and resourcepart
+					WEBrick::HTTPUtils.escape(s.id.to_s) +
+					' ' +
+					WEBrick::HTTPUtils.escape(
+						s.from.resource.to_s
+					)
+			)),
+			{'Content-Type' => 'application/json'},
+			[201]
+		)
+	end
+
+	def self.validate_num(num)
+		EMPromise.resolve(num.to_s).then { |num_dest|
 			if num_dest =~ /\A\+?[0-9]+(?:;.*)?\Z/
 				next num_dest if num_dest[0] == '+'
 				shortcode = extract_shortcode(num_dest)
@@ -179,29 +201,38 @@ module SGXcatapult
 			end
 			# TODO: text re num not (yet) supportd/implmentd
 			EMPromise.reject([:cancel, 'item-not-found'])
-		}.then { |num_dest|
-			cred_key = "catapult_cred-#{m.from.stripped}"
-			REDIS.lrange(cred_key, 0, 3).then { |creds|
-				[num_dest] + creds
-			}
-		}.then { |(num_dest, *creds)|
+		}
+	end
+
+	def self.fetch_catapult_cred_for(jid)
+		cred_key = "catapult_cred-#{jid.stripped}"
+		REDIS.lrange(cred_key, 0, 3).then { |creds|
 			if creds.length < 4
 				# TODO: add text re credentials not registered
 				EMPromise.reject(
 					[:auth, 'registration-required']
 				)
 			else
-				jid_key = "catapult_jid-#{num_dest}"
-				REDIS.get(jid_key).then { |jid|
-					[jid, num_dest] + creds
-				}
+				creds
 			end
+		}
+	end
+
+	message :chat?, :body do |m|
+		EMPromise.all([
+			validate_num(m.to.node),
+			fetch_catapult_cred_for(m.from)
+		]).then { |(num_dest, creds)|
+			jid_key = "catapult_jid-#{num_dest}"
+			REDIS.get(jid_key).then { |jid|
+				[jid, num_dest] + creds
+			}
 		}.then { |(jid, num_dest, *creds)|
 			# if destination user is in the system pass on directly
 			if jid
 				pass_on_message(m, creds.last, jid)
 			else
-				to_catapult(m, num_dest, *creds)
+				to_catapult(m, nil, num_dest, *creds)
 			end
 		}.catch { |e|
 			if e.is_a?(Array) && e.length == 2
@@ -432,158 +463,73 @@ module SGXcatapult
 	end
 
 	iq '/iq/ns:close', ns:	'http://jabber.org/protocol/ibb' do |i, cn|
-	begin
 		puts "IQc: #{i.inspect}"
 		write_to_stream i.reply
 
-		# TODO: refactor below so that "message :chat?" uses same code
-		num_dest = i.to.to_s.split('@', 2)[0]
+		EMPromise.all([
+			validate_num(i.to.node),
+			fetch_catapult_cred_for(i.from)
+		]).then { |(num_dest, creds)|
+			# Gajim bug: <close/> has Jingle (not transport) sid; fix later
+			if not @jingle_fnames.key? cn[0]['sid']
+				puts 'ERROR: Not found in filename map: ' + cn[0]['sid']
 
-		if num_dest[0] != '+'
-			# check to see if a valid shortcode context is specified
-			num_and_context = num_dest.split(';', 2)
-			if num_and_context[1] and num_and_context[1] ==
-				'phone-context=ca-us.phone-context.soprani.ca'
-
-				# TODO: check if num_dest is fully numeric
-				num_dest = num_and_context[0]
-			else
-				# TODO: text re num not (yet) supportd/implmentd
-				write_to_stream error_msg(
-					i.reply, nil,
-					:cancel, 'item-not-found'
-				)
-				next
+				next EMPromise.reject(:done)
+				# TODO: in case only Gajim's <data/> bug fixed, add map:
+				#cn[0]['sid'] = @jingle_tsids[cn[0]['sid']]
 			end
-		end
 
-		bare_jid = i.from.to_s.split('/', 2)[0]
-		cred_key = "catapult_cred-" + bare_jid
+			# upload cached data to server (before success reply)
+			media_name =
+				"#{Time.now.utc.iso8601}_#{SecureRandom.uuid}"\
+				"_#{@jingle_fnames[cn[0]['sid']]}"
+			puts 'name to save: ' + media_name
 
-		# TODO: connect at start of program instead
-		conn = Hiredis::Connection.new
-		conn.connect(ARGV[4], ARGV[5].to_i)
+			path = "/v1/users/#{creds.first}/media/#{media_name}"
 
-		conn.write ["EXISTS", cred_key]
-		if conn.read == 0
-			conn.disconnect
-
-			# TODO: add text re credentials not being registered
-			write_to_stream error_msg(
-				i.reply, nil, :auth,
-				'registration-required'
-			)
-			next
-		end
-
-		conn.write ["LRANGE", cred_key, 0, 3]
-		user_id, api_token, api_secret, users_num = conn.read
-		conn.disconnect
-
-		# Gajim bug: <close/> has Jingle (not transport) sid; fix later
-		if not @jingle_fnames.key? cn[0]['sid']
-			puts 'ERROR: Not found in filename map: ' + cn[0]['sid']
-
-			next
-			# TODO: in case only Gajim's <data/> bug fixed, add map:
-			#cn[0]['sid'] = @jingle_tsids[cn[0]['sid']]
-		end
-
-		# upload cached data to server (before success reply)
-		media_name =
-			"#{Time.now.utc.iso8601}_#{SecureRandom.uuid}"\
-			"_#{@jingle_fnames[cn[0]['sid']]}"
-		puts 'name to save: ' + media_name
-
-		uri = URI.parse('https://api.catapult.inetwork.com')
-		http = Net::HTTP.new(uri.host, uri.port)
-		http.use_ssl = true
-		request = Net::HTTP::Put.new('/v1/users/' + user_id +
-			'/media/' + media_name)
-		request.basic_auth api_token, api_secret
-		request.body = @partial_data[cn[0]['sid']]
-		response = http.request(request)
-
-		puts 'eAPI response to send: ' + response.to_s + ' with code ' +
-			response.code + ', body "' + response.body + '"'
-
-		if response.code != '200'
-			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(
-				i.reply, nil, :cancel,
-				'internal-server-error'
-			)
-			next
-		end
-
-		uri = URI.parse('https://api.catapult.inetwork.com')
-		http = Net::HTTP.new(uri.host, uri.port)
-		http.use_ssl = true
-		request = Net::HTTP::Post.new('/v1/users/' + user_id +
-			'/messages')
-		request.basic_auth api_token, api_secret
-		request.add_field('Content-Type', 'application/json')
-		request.body = JSON.dump(
-			'from'			=> users_num,
-			'to'			=> num_dest,
-			'text'			=> '',
-			'media'			=> [
-				'https://api.catapult.inetwork.com/v1/users/' +
-				user_id + '/media/' + media_name
-			],
-			'tag'			=>
-				# callbacks need both the id and resourcepart
-				WEBrick::HTTPUtils.escape(i.id.to_s) + ' ' +
-				WEBrick::HTTPUtils.escape(
-					i.from.to_s.split('/', 2)[1].to_s
+			EMPromise.all([
+				call_catapult(
+					*creds[1..2],
+					:put,
+					path,
+					@partial_data[cn[0]['sid']]
+				),
+				to_catapult(
+					i,
+					"https://api.catapult.inetwork.com/" +
+						path,
+					num_dest,
+					*creds
 				)
-			# TODO: add back when Bandwidth AP supports it (?); now:
-			#  "The ''messages'' resource property
-			#  ''receiptRequested'' is not supported for MMS"
-			#'receiptRequested'	=> 'all',
-			#'callbackUrl'		=> ARGV[6]
-		)
-		response = http.request(request)
+			])
+		}.then {
+			@partial_data[cn[0]['sid']] = ''
 
-		puts 'mAPI response to send: ' + response.to_s + ' with code ' +
-			response.code + ', body "' + response.body + '"'
+			# received the complete file so now close the stream
+			msg = Blather::Stanza::Iq.new :set
+			msg.to = i.from
+			msg.from = i.to
 
-		if response.code != '201'
-			# TODO: add text re unexpected code; mention code number
-			write_to_stream error_msg(
-				i.reply, nil, :cancel,
-				'internal-server-error'
-			)
-			next
-		end
+			j = Nokogiri::XML::Node.new 'jingle', msg.document
+			j['xmlns'] = 'urn:xmpp:jingle:1'
+			j['action'] = 'session-terminate'
+			j['sid'] = @jingle_sids[cn[0]['sid']]
+			msg.add_child(j)
 
-		@partial_data[cn[0]['sid']] = ''
+			r = Nokogiri::XML::Node.new 'reason', msg.document
+			s = Nokogiri::XML::Node.new 'success', msg.document
+			r.add_child(s)
+			j.add_child(r)
 
-		# received the complete file so now close the stream
-		msg = Blather::Stanza::Iq.new :set
-		msg.to = i.from
-		msg.from = i.to
-
-		j = Nokogiri::XML::Node.new 'jingle', msg.document
-		j['xmlns'] = 'urn:xmpp:jingle:1'
-		j['action'] = 'session-terminate'
-		j['sid'] = @jingle_sids[cn[0]['sid']]
-		msg.add_child(j)
-
-		r = Nokogiri::XML::Node.new 'reason', msg.document
-		s = Nokogiri::XML::Node.new 'success', msg.document
-		r.add_child(s)
-		j.add_child(r)
-
-		puts 'RESPONSE1: ' + msg.inspect
-		write_to_stream msg
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 007: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
+			puts 'RESPONSE1: ' + msg.inspect
+			write_to_stream msg
+		}.catch { |e|
+			if e.is_a?(Array) && e.length == 2
+				write_to_stream error_msg(i.reply, nil, *e)
+			elsif e != :done
+				EMPromise.reject(e)
+			end
+		}.catch(&method(:panic))
 	end
 
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#items' do |i|

@@ -943,7 +943,6 @@ class WebhookHandler < Goliath::API
 	def response(env)
 		puts 'ENV: ' + env.to_s
 		body = Rack::Request.new(env).body.read
-		puts 'BODY: ' + body
 		params = JSON.parse body
 
 		users_num = ''
@@ -956,9 +955,24 @@ class WebhookHandler < Goliath::API
 			others_num = params['to']
 		else
 			# TODO: exception or similar
-			puts "big problem: '" + params['direction'] + "'"
+			puts "big problem: '" + params['direction'] + "'" + body
 			return [200, {}, "OK"]
 		end
+
+		puts 'BODY - messageId: ' + params['messageId'] +
+			', eventType: ' + params['eventType'] +
+			', time: ' + params['time'] +
+			', direction: ' + params['direction'] +
+			', state: ' + params['state'] +
+			', deliveryState: ' + (params['deliveryState'] ?
+				params['deliveryState'] : 'NONE') +
+			', deliveryCode: ' + (params['deliveryCode'] ?
+				params['deliveryCode'] : 'NONE') +
+			', deliveryDesc: ' + (params['deliveryDescription'] ?
+				params['deliveryDescription'] : 'NONE') +
+			', tag: ' + (params['tag'] ? params['tag'] : 'NONE') +
+			', media: ' + (params['media'] ? params['media'].to_s :
+				'NONE')
 
 		if others_num[0] != '+'
 			# TODO: check that others_num actually a shortcode first

@@ -3,7 +3,7 @@ source 'https://rubygems.org'
 gem 'activesupport', '<5.0.0'
 gem 'blather'
 gem 'em-http-request'
-gem 'eventmachine', '1.0.0'
+gem 'eventmachine', '1.0.1'
 gem 'promise.rb'
 
 gem 'em-hiredis'

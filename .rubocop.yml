@@ -103,5 +103,8 @@ Style/SpaceAroundEqualsInParameterDefault:
 Style/IndentArray:
   EnforcedStyle: consistent
 
+Style/SymbolArray:
+  EnforcedStyle: brackets
+
 Style/FirstParameterIndentation:
   EnforcedStyle: consistent

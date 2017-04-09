@@ -22,114 +22,91 @@ $stdout.sync = true
 puts "Soprani.ca/MMS Proxy for XMPP - Catapult\n"\
 	"==>> last commit of this version is " + `git rev-parse HEAD` + "\n"
 
+require 'em-hiredis'
+require 'em-http-request'
 require 'goliath'
-require 'net/http'
-require 'redis/connection/hiredis'
 require 'uri'
-require 'webrick'
 
-if ARGV.size != 3
-	puts "Usage: mpx-catapult.rb <http_listen_port> "\
-		"<redis_hostname> <redis_port>"
-	exit 0
-end
+require_relative 'em_promise'
 
 t = Time.now
 puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
 
-class WebhookHandler < Goliath::API
-	def response(env)
-		puts 'ENV: ' + env.to_s
-		puts 'path: ' + env['REQUEST_PATH']
-		puts 'method: ' + env['REQUEST_METHOD']
-		puts 'BODY: ' + Rack::Request.new(env).body.read
-
-		cred_key = "catapult_cred-" + WEBrick::HTTPUtils.unescape(
-			env['REQUEST_PATH'].split('/', 3)[1])
-
-		# TODO: connect at start of program instead
-		conn = Hiredis::Connection.new
-		begin
-			conn.connect(ARGV[1], ARGV[2].to_i)
-		rescue => e
-			puts 'ERROR: Redis connection failed: ' + e.inspect
-			return [
-				500,
-				{'Content-Type' => 'text/plain'},
-				e.inspect
-			]
-		end
-
-		conn.write ["EXISTS", cred_key]
-		if conn.read == 0
-			conn.disconnect
-
-			puts 'ERROR: invalid path rqst: ' + env['REQUEST_PATH']
-			return [
-				404,
-				{'Content-Type' => 'text/plain'},
-				'not found'
-			]
-		end
-
-		conn.write ["LRANGE", cred_key, 0, 2]
-		user_id, api_token, api_secret = conn.read
-		conn.disconnect
-
-		uri = URI.parse('https://api.catapult.inetwork.com')
-		http = Net::HTTP.new(uri.host, uri.port)
-		http.use_ssl = true
-		request = ''
-		if env['REQUEST_METHOD'] == 'GET'
-			request = Net::HTTP::Get.new('/v1/users/' + user_id +
-				'/media/' +env['REQUEST_PATH'].split('/', 3)[2])
-		elsif env['REQUEST_METHOD'] == 'HEAD'
-			request = Net::HTTP::Head.new('/v1/users/' + user_id +
-				'/media/' +env['REQUEST_PATH'].split('/', 3)[2])
-		else
-			puts 'ERROR: received non-HEAD/-GET request'
-			return [
-				500,
-				{'Content-Type' => 'text/plain'},
-				e.inspect
-			]
-		end
-		request.basic_auth api_token, api_secret
-		response = http.request(request)
-
-		puts 'API response to send: ' + response.to_s + ' with code ' +
-			response.code + ', body <omitted_due_to_length>'
-
-		if response.code != '200'
-			puts 'ERROR: unexpected return code ' + response.code
-
-			if response.code == '404'
-				return [
-					404,
-					{'Content-Type' => 'text/plain'},
-					'not found'
-				]
-			end
-
-			return [
-				response.code,
-				{'Content-Type' => 'text/plain'},
-				'unexpected error'
-			]
-		end
-
-		# TODO: maybe need to reflect more headers (multi-part?)
-		[200, {'Content-Length' => response['content-length']},
-			response.body]
-	end
+EM.next_tick do
+	REDIS = EM::Hiredis.connect
 end
 
-EM.run do
-	server = Goliath::Server.new('0.0.0.0', ARGV[0].to_i)
-	server.api = WebhookHandler.new
-	server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
-	server.logger = Log4r::Logger.new('goliath')
-	server.logger.add(Log4r::StdoutOutputter.new('console'))
-	server.logger.level = Log4r::INFO
-	server.start
+class WebhookHandler < Goliath::API
+	def media_request(env, user_id, token, secret, method, media_id)
+		if ![:get, :head].include?(method)
+			env.logger.debug 'ERROR: received non-HEAD/-GET request'
+			return EMPromise.reject(405)
+		end
+
+		EM::HttpRequest.new(
+			"https://api.catapult.inetwork.com/v1/users/"\
+			"#{user_id}/media/#{media_id}"
+		).public_send(
+			method,
+			head: {
+				'Authorization' => [token, secret]
+			}
+		).then { |http|
+			env.logger.debug "API response to send: #{http.response} "\
+				"with code #{http.response_header.status}"
+
+			case http.response_header.status
+			when 200
+				http
+			else
+				EMPromise.reject(http.response_header.status)
+			end
+		}
+	end
+
+	def response(env)
+		env.logger.debug 'ENV: ' + env.to_s
+		env.logger.debug 'path: ' + env['REQUEST_PATH']
+		env.logger.debug 'method: ' + env['REQUEST_METHOD']
+		env.logger.debug 'BODY: ' + Rack::Request.new(env).body.read
+
+		jid, media_id = env['REQUEST_PATH'].split('/')[-2..-1]
+		cred_key = "catapult_cred-#{URI.unescape(jid)}"
+
+		REDIS.lrange(cred_key, 0, 2).then { |creds|
+			if creds.length < 3
+				EMPromise.reject(404)
+			else
+				media_request(
+					env,
+					*creds,
+					env['REQUEST_METHOD'].downcase.to_sym,
+					media_id
+				)
+			end
+		}.then { |http|
+			clength = http.response_header['content-length']
+			[200, {'Content-Length' => clength}, http.response]
+		}.catch { |code|
+			if code.is_a?(Integer)
+				EMPromise.reject(code)
+			else
+				env.logger.error("ERROR: #{code.inspect}")
+				EMPromise.reject(500)
+			end
+		}.catch { |code|
+			[
+				code,
+				{'Content-Type' => 'text/plain;charset=utf-8'},
+				case code
+				when 404
+					"not found\n"
+				when 405
+					"only HEAD and GET are allowed\n"
+				else
+					"unexpected error\n"
+				end
+			]
+		}.sync
+	end
 end

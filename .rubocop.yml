@@ -14,7 +14,7 @@ Lint/RescueException:
   Enabled: false
 
 Metrics/AbcSize:
-  Max: 111
+  Max: 134
 
 Metrics/BlockLength:
   Max: 200
@@ -26,7 +26,7 @@ Metrics/ClassLength:
   Max: 200
 
 Metrics/CyclomaticComplexity:
-  Max: 20
+  Max: 22
 
 Metrics/MethodLength:
   Max: 200
@@ -38,7 +38,7 @@ Metrics/ParameterLists:
   Max: 7
 
 Metrics/PerceivedComplexity:
-  Max: 20
+  Max: 22
 
 Style/AndOr:
   Enabled: false
@@ -67,6 +67,9 @@ Style/MultilineMethodCallBraceLayout:
   Enabled: false
 
 Style/MultilineOperationIndentation:
+  Enabled: false
+
+Style/MultilineTernaryOperator:
   Enabled: false
 
 Style/Next:

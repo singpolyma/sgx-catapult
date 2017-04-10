@@ -52,8 +52,8 @@ class WebhookHandler < Goliath::API
 				'Authorization' => [token, secret]
 			}
 		).then { |http|
-			env.logger.debug "API response to send: #{http.response} "\
-				"with code #{http.response_header.status}"
+			env.logger.debug "API response code to send: " +
+				http.response_header.status.to_s
 
 			case http.response_header.status
 			when 200

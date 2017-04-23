@@ -67,6 +67,10 @@ module SGXcatapult
 	@jingle_fnames = {}
 	@partial_data = {}
 	@client = SGXClient.new
+	@gateway_features = [
+		"http://jabber.org/protocol/disco#info",
+		"jabber:iq:register"
+	]
 
 	def self.run
 		client.run
@@ -263,6 +267,11 @@ module SGXcatapult
 			#"urn:xmpp:jingle:apps:file-transfer:4"
 			"urn:xmpp:jingle:apps:file-transfer:3"
 		]
+	end
+
+	def self.add_gateway_feature(feature)
+		@gateway_features << feature
+		@gateway_features.uniq!
 	end
 
 	presence :subscribe? do |p|
@@ -500,10 +509,6 @@ module SGXcatapult
 		}
 	end
 
-	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#items' do |i|
-		write_to_stream i.reply
-	end
-
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#info' do |i|
 		# respond to capabilities request for an sgx-catapult number JID
 		if i.to.node
@@ -525,14 +530,7 @@ module SGXcatapult
 			name: 'Soprani.ca Gateway to XMPP - Catapult',
 			type: 'sms', category: 'gateway'
 		}]
-		msg.features = [
-			"jabber:iq:register",
-			"jabber:iq:gateway",
-			"jabber:iq:private",
-			"http://jabber.org/protocol/disco#info",
-			"http://jabber.org/protocol/commands",
-			"http://jabber.org/protocol/muc"
-		]
+		msg.features = @gateway_features
 		write_to_stream msg
 	end
 

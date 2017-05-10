@@ -884,6 +884,14 @@ module SGXcatapult
 		#write_to_stream s.approve!
 		#write_to_stream s.request!
 	end
+
+	iq :get? do |i|
+		write_to_stream error_msg(i.reply, i.query, 'cancel', 'feature-not-implemented')
+	end
+
+	iq :set? do |i|
+		write_to_stream error_msg(i.reply, i.query, 'cancel', 'feature-not-implemented')
+	end
 end
 
 [:INT, :TERM].each do |sig|

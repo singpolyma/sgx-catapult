@@ -64,12 +64,26 @@ def extract_shortcode(dest)
 	num if context && context == 'phone-context=ca-us.phone-context.soprani.ca'
 end
 
+class SGXClient < Blather::Client
+	def register_handler(type, *guards, &block)
+		super(type, *guards) do |stanza|
+			begin
+				v = block.call(stanza)
+				v.catch(&method(:panic)) if v.is_a?(Promise)
+			rescue Exception => e
+				panic(e)
+			end
+		end
+	end
+end
+
 module SGXcatapult
 	extend Blather::DSL
 
 	@jingle_sids = {}
 	@jingle_fnames = {}
 	@partial_data = {}
+	@client = SGXClient.new
 
 	def self.run
 		client.run
@@ -97,12 +111,6 @@ module SGXcatapult
 		# TODO: add some explanatory xml:lang='en' text (see text param)
 		puts "RESPONSE3: #{orig.inspect}"
 		return orig
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 000: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
 	end
 
 	setup ARGV[0], ARGV[1], ARGV[2], ARGV[3]
@@ -240,7 +248,7 @@ module SGXcatapult
 			else
 				EMPromise.reject(e)
 			end
-		}.catch(&method(:panic))
+		}
 	end
 
 	def self.user_cap_identities
@@ -262,7 +270,6 @@ module SGXcatapult
 	end
 
 	presence :subscribe? do |p|
-	begin
 		puts "PRESENCE1: #{p.inspect}"
 
 		# subscriptions are allowed from anyone - send reply immediately
@@ -297,17 +304,9 @@ module SGXcatapult
 
 		puts 'RESPONSE5c: ' + msg.inspect
 		write_to_stream msg
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 002: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	presence :probe? do |p|
-	begin
 		puts 'PRESENCE2: ' + p.inspect
 
 		caps = Blather::Stanza::Capabilities.new
@@ -322,17 +321,9 @@ module SGXcatapult
 
 		puts 'RESPONSE6: ' + msg.inspect
 		write_to_stream msg
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 003: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	iq '/iq/ns:jingle', ns: 'urn:xmpp:jingle:1' do |i, jn|
-	begin
 		puts "IQj: #{i.inspect}"
 
 		if jn[0]['action'] == 'transport-accept'
@@ -425,41 +416,18 @@ module SGXcatapult
 
 		puts "RESPONSE9: #{msg.inspect}"
 		write_to_stream msg
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 004: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	iq '/iq/ns:open', ns:	'http://jabber.org/protocol/ibb' do |i, on|
-	begin
 		puts "IQo: #{i.inspect}"
 
 		@partial_data[on[0]['sid']] = ''
 		write_to_stream i.reply
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 005: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	iq '/iq/ns:data', ns:	'http://jabber.org/protocol/ibb' do |i, dn|
-	begin
 		@partial_data[dn[0]['sid']] += Base64.decode64(dn[0].text)
 		write_to_stream i.reply
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 006: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	iq '/iq/ns:close', ns:	'http://jabber.org/protocol/ibb' do |i, cn|
@@ -529,23 +497,14 @@ module SGXcatapult
 			elsif e != :done
 				EMPromise.reject(e)
 			end
-		}.catch(&method(:panic))
+		}
 	end
 
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#items' do |i|
-	begin
 		write_to_stream i.reply
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 008: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#info' do |i|
-	begin
 		# respond to capabilities request for an sgx-catapult number JID
 		if i.to.node
 			# TODO: confirm the node URL is expected using below
@@ -575,13 +534,6 @@ module SGXcatapult
 			"http://jabber.org/protocol/muc"
 		]
 		write_to_stream msg
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 009: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	def self.check_then_register(user_id, api_token, api_secret, phone_num,
@@ -674,16 +626,9 @@ module SGXcatapult
 		write_to_stream i.reply
 
 		return true
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 010: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
 	end
 
 	iq '/iq/ns:query', ns: 'jabber:iq:register' do |i, qn|
-	begin
 		puts "IQ: #{i.inspect}"
 
 		if i.type == :set
@@ -870,13 +815,6 @@ module SGXcatapult
 			write_to_stream orig
 			puts "SENT"
 		end
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 011: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
 	end
 
 	subscription(:request?) do |s|

@@ -70,6 +70,7 @@ class SGXClient < Blather::Client
 			begin
 				v = block.call(stanza)
 				v.catch(&method(:panic)) if v.is_a?(Promise)
+				true # Do not run other handlers unless throw :pass
 			rescue Exception => e
 				panic(e)
 			end
@@ -821,6 +822,14 @@ module SGXcatapult
 		# TODO: are these the best to return?  really need '!' here?
 		#write_to_stream s.approve!
 		#write_to_stream s.request!
+	end
+
+	iq :get? do |i|
+		write_to_stream error_msg(i.reply, i.children, 'cancel', 'feature-not-implemented')
+	end
+
+	iq :set? do |i|
+		write_to_stream error_msg(i.reply, i.children, 'cancel', 'feature-not-implemented')
 	end
 end
 

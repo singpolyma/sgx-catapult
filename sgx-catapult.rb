@@ -827,7 +827,7 @@ class WebhookHandler < Goliath::API
 	end
 
 	def response(env)
-		puts 'ENV: ' + env.to_s
+		puts 'ENV: ' + env.reject{ |k| k == 'params' }.to_s
 
 		users_num = ''
 		others_num = ''

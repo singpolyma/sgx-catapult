@@ -313,7 +313,7 @@ module SGXcatapult
 		@gateway_features.uniq!
 	end
 
-	presence :subscribe? do |p|
+	subscription :request? do |p|
 		puts "PRESENCE1: #{p.inspect}"
 
 		# subscriptions are allowed from anyone - send reply immediately
@@ -802,12 +802,6 @@ module SGXcatapult
 				EMPromise.reject(e)
 			end
 		}.catch(&method(:panic))
-	end
-
-	subscription(:request?) do |s|
-		# TODO: are these the best to return?  really need '!' here?
-		#write_to_stream s.approve!
-		#write_to_stream s.request!
 	end
 
 	iq :get? do |i|

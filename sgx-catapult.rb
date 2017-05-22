@@ -81,6 +81,45 @@ module SGXcatapult
 		client.write(stanza)
 	end
 
+	def self.send_media(from, to, media_url, desc=nil, subject=nil)
+		# we assume media_url is of the form (always the case so far):
+		#  https://api.catapult.inetwork.com/v1/users/[uid]/media/[file]
+
+		# the caller must guarantee that 'to' is a bare JID
+		proxy_url = ARGV[6] + to + '/' + media_url.split('/', 8)[7]
+
+		puts 'ORIG_URL: ' + media_url
+		puts 'PROX_URL: ' + proxy_url
+
+		# put URL in the body (so Conversations will still see it)...
+		msg = Blather::Stanza::Message.new(to, proxy_url)
+		msg.from = from
+		msg.subject = subject if subject
+
+		# ...but also provide URL in XEP-0066 (OOB) fashion
+		# TODO: confirm client supports OOB or don't send this
+		x = Nokogiri::XML::Node.new 'x', msg.document
+		x['xmlns'] = 'jabber:x:oob'
+
+		urln = Nokogiri::XML::Node.new 'url', msg.document
+		urlc = Nokogiri::XML::Text.new proxy_url, msg.document
+		urln.add_child(urlc)
+		x.add_child(urln)
+
+		if desc
+			descn = Nokogiri::XML::Node.new('desc', msg.document)
+			descc = Nokogiri::XML::Text.new(desc, msg.document)
+			descn.add_child(descc)
+			x.add_child(descn)
+		end
+
+		msg.add_child(x)
+
+		write(msg)
+	rescue Exception => e
+		panic(e)
+	end
+
 	def self.error_msg(orig, query_node, type, name, text=nil)
 		if not query_node.nil?
 			orig.add_child(query_node)
@@ -791,41 +830,6 @@ end
 class WebhookHandler < Goliath::API
 	use Goliath::Rack::Params
 
-	def send_media(from, to, media_url)
-		# we assume media_url is of the form (always the case so far):
-		#  https://api.catapult.inetwork.com/v1/users/[uid]/media/[file]
-
-		# the caller must guarantee that 'to' is a bare JID
-		proxy_url = ARGV[6] + to + '/' + media_url.split('/', 8)[7]
-
-		puts 'ORIG_URL: ' + media_url
-		puts 'PROX_URL: ' + proxy_url
-
-		# put URL in the body (so Conversations will still see it)...
-		msg = Blather::Stanza::Message.new(to, proxy_url)
-		msg.from = from
-
-		# ...but also provide URL in XEP-0066 (OOB) fashion
-		# TODO: confirm client supports OOB or don't send this
-		x = Nokogiri::XML::Node.new 'x', msg.document
-		x['xmlns'] = 'jabber:x:oob'
-
-		urln = Nokogiri::XML::Node.new 'url', msg.document
-		urlc = Nokogiri::XML::Text.new proxy_url, msg.document
-
-		urln.add_child(urlc)
-		x.add_child(urln)
-		msg.add_child(x)
-
-		SGXcatapult.write(msg)
-
-	rescue Exception => e
-		puts 'Shutting down gateway due to exception 012: ' + e.message
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-		EM.stop
-	end
-
 	def response(env)
 		puts 'ENV: ' + env.reject{ |k| k == 'params' }.to_s
 
@@ -892,7 +896,7 @@ class WebhookHandler < Goliath::API
 					)
 
 						has_media = true
-						send_media(
+						SGXcatapult.send_media(
 							others_num + '@' +
 							ARGV[0],
 							bare_jid, media_url

@@ -33,22 +33,6 @@ require 'log4r'
 
 require_relative 'em_promise'
 
-$stdout.sync = true
-
-puts "Soprani.ca/SMS Gateway for XMPP - Catapult\n"\
-	"==>> last commit of this version is " + `git rev-parse HEAD` + "\n"
-
-if ARGV.size != 9
-	puts "Usage: sgx-catapult.rb <component_jid> <component_password> "\
-		"<server_hostname> <server_port> "\
-		"<redis_hostname> <redis_port> <delivery_receipt_url> "\
-		"<http_listen_port> <mms_proxy_prefix_url>"
-	exit 0
-end
-
-t = Time.now
-puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
-
 def panic(e)
 	puts "Shutting down gateway due to exception: #{e.message}"
 	puts e.backtrace
@@ -83,6 +67,10 @@ module SGXcatapult
 	@jingle_fnames = {}
 	@partial_data = {}
 	@client = SGXClient.new
+	@gateway_features = [
+		"http://jabber.org/protocol/disco#info",
+		"jabber:iq:register"
+	]
 
 	def self.run
 		client.run
@@ -143,7 +131,8 @@ module SGXcatapult
 	end
 
 	def self.call_catapult(
-		token, secret, m, pth, body=nil, head={}, code=[200]
+		token, secret, m, pth, body=nil,
+		head={}, code=[200], respond_with=:body
 	)
 		EM::HttpRequest.new(
 			"https://api.catapult.inetwork.com/#{pth}"
@@ -158,7 +147,14 @@ module SGXcatapult
 				" response.code #{http.response_header.status}"
 
 			if code.include?(http.response_header.status)
-				http.response
+				case respond_with
+				when :body
+					http.response
+				when :headers
+					http.response_header
+				else
+					http
+				end
 			else
 				EMPromise.reject(http.response_header.status)
 			end
@@ -173,7 +169,7 @@ module SGXcatapult
 		else
 			{
 				receiptRequested: 'all',
-				callbackUrl:      ARGV[6]
+				callbackUrl:      ARGV[4]
 			}
 		end
 
@@ -271,6 +267,11 @@ module SGXcatapult
 			#"urn:xmpp:jingle:apps:file-transfer:4"
 			"urn:xmpp:jingle:apps:file-transfer:3"
 		]
+	end
+
+	def self.add_gateway_feature(feature)
+		@gateway_features << feature
+		@gateway_features.uniq!
 	end
 
 	presence :subscribe? do |p|
@@ -508,10 +509,6 @@ module SGXcatapult
 		}
 	end
 
-	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#items' do |i|
-		write_to_stream i.reply
-	end
-
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#info' do |i|
 		# respond to capabilities request for an sgx-catapult number JID
 		if i.to.node
@@ -533,14 +530,7 @@ module SGXcatapult
 			name: 'Soprani.ca Gateway to XMPP - Catapult',
 			type: 'sms', category: 'gateway'
 		}]
-		msg.features = [
-			"jabber:iq:register",
-			"jabber:iq:gateway",
-			"jabber:iq:private",
-			"http://jabber.org/protocol/disco#info",
-			"http://jabber.org/protocol/commands",
-			"http://jabber.org/protocol/muc"
-		]
+		msg.features = @gateway_features
 		write_to_stream msg
 	end
 
@@ -790,16 +780,6 @@ module SGXcatapult
 	end
 end
 
-[:INT, :TERM].each do |sig|
-	trap(sig) {
-		puts 'Shutting down gateway...'
-		SGXcatapult.shutdown
-		puts 'Gateway has terminated.'
-
-		EM.stop
-	}
-end
-
 class ReceiptMessage < Blather::Stanza
 	def self.new(to=nil)
 		node = super :message
@@ -809,12 +789,14 @@ class ReceiptMessage < Blather::Stanza
 end
 
 class WebhookHandler < Goliath::API
+	use Goliath::Rack::Params
+
 	def send_media(from, to, media_url)
 		# we assume media_url is of the form (always the case so far):
 		#  https://api.catapult.inetwork.com/v1/users/[uid]/media/[file]
 
 		# the caller must guarantee that 'to' is a bare JID
-		proxy_url = ARGV[8] + to + '/' + media_url.split('/', 8)[7]
+		proxy_url = ARGV[6] + to + '/' + media_url.split('/', 8)[7]
 
 		puts 'ORIG_URL: ' + media_url
 		puts 'PROX_URL: ' + proxy_url
@@ -846,8 +828,6 @@ class WebhookHandler < Goliath::API
 
 	def response(env)
 		puts 'ENV: ' + env.to_s
-		body = Rack::Request.new(env).body.read
-		params = JSON.parse body
 
 		users_num = ''
 		others_num = ''
@@ -1016,23 +996,51 @@ class WebhookHandler < Goliath::API
 	end
 end
 
-EM.run do
-	REDIS = EM::Hiredis.connect("redis://#{ARGV[4]}:#{ARGV[5]}/0")
+at_exit do
+	$stdout.sync = true
 
-	SGXcatapult.run
+	puts "Soprani.ca/SMS Gateway for XMPP - Catapult\n"\
+		"==>> last commit of this version is " + `git rev-parse HEAD` + "\n"
 
-	# required when using Prosody otherwise disconnects on 6-hour inactivity
-	EM.add_periodic_timer(3600) do
-		msg = Blather::Stanza::Iq::Ping.new(:get, 'localhost')
-		msg.from = ARGV[0]
-		SGXcatapult.write(msg)
+	if ARGV.size != 7
+		puts "Usage: sgx-catapult.rb <component_jid> "\
+			"<component_password> <server_hostname> "\
+			"<server_port> <delivery_receipt_url> "\
+			"<http_listen_port> <mms_proxy_prefix_url>"
+		exit 0
 	end
 
-	server = Goliath::Server.new('0.0.0.0', ARGV[7].to_i)
-	server.api = WebhookHandler.new
-	server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
-	server.logger = Log4r::Logger.new('goliath')
-	server.logger.add(Log4r::StdoutOutputter.new('console'))
-	server.logger.level = Log4r::INFO
-	server.start
+	t = Time.now
+	puts "LOG %d.%09d: starting...\n\n" % [t.to_i, t.nsec]
+
+	EM.run do
+		REDIS = EM::Hiredis.connect
+
+		SGXcatapult.run
+
+		# required when using Prosody otherwise disconnects on 6-hour inactivity
+		EM.add_periodic_timer(3600) do
+			msg = Blather::Stanza::Iq::Ping.new(:get, 'localhost')
+			msg.from = ARGV[0]
+			SGXcatapult.write(msg)
+		end
+
+		server = Goliath::Server.new('0.0.0.0', ARGV[5].to_i)
+		server.api = WebhookHandler.new
+		server.app = Goliath::Rack::Builder.build(server.api.class, server.api)
+		server.logger = Log4r::Logger.new('goliath')
+		server.logger.add(Log4r::StdoutOutputter.new('console'))
+		server.logger.level = Log4r::INFO
+		server.start do
+			["INT", "TERM"].each do |sig|
+				trap(sig) do
+					puts 'Shutting down gateway...'
+					SGXcatapult.shutdown
+
+					puts 'Gateway has terminated.'
+					EM.stop
+				end
+			end
+		end
+	end
 end

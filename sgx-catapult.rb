@@ -1038,11 +1038,13 @@ at_exit do
 		server.start do
 			["INT", "TERM"].each do |sig|
 				trap(sig) do
-					puts 'Shutting down gateway...'
-					SGXcatapult.shutdown
+					EM.defer do
+						puts 'Shutting down gateway...'
+						SGXcatapult.shutdown
 
-					puts 'Gateway has terminated.'
-					EM.stop
+						puts 'Gateway has terminated.'
+						EM.stop
+					end
 				end
 			end
 		end

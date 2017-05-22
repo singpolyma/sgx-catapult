@@ -49,6 +49,9 @@ Style/AlignParameters:
 Style/BlockDelimiters:
   Enabled: false
 
+Style/CaseIndentation:
+  EnforcedStyle: end
+
 Style/Documentation:
   Enabled: false
 

@@ -48,15 +48,25 @@ end
 
 class SGXClient < Blather::Client
 	def register_handler(type, *guards, &block)
-		super(type, *guards) do |stanza|
-			begin
-				v = block.call(stanza)
-				v.catch(&method(:panic)) if v.is_a?(Promise)
-				true # Do not run other handlers unless throw :pass
-			rescue Exception => e
-				panic(e)
-			end
-		end
+		super(type, *guards) { |stanza| wrap_handler(stanza, &block) }
+	end
+
+	def register_handler_before(type, *guards, &block)
+		check_handler(type, guards)
+		handler = lambda { |stanza| wrap_handler(stanza, &block) }
+
+		@handlers[type] ||= []
+		@handlers[type].unshift([guards, handler])
+	end
+
+protected
+
+	def wrap_handler(stanza, &block)
+		v = block.call(stanza)
+		v.catch(&method(:panic)) if v.is_a?(Promise)
+		true # Do not run other handlers unless throw :pass
+	rescue Exception => e
+		panic(e)
 	end
 end
 
@@ -79,6 +89,10 @@ module SGXcatapult
 	# so classes outside this module can write messages, too
 	def self.write(stanza)
 		client.write(stanza)
+	end
+
+	def self.before_handler(type, *guards, &block)
+		client.register_handler_before(type, *guards, &block)
 	end
 
 	def self.send_media(from, to, media_url, desc=nil, subject=nil)

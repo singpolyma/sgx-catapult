@@ -48,12 +48,12 @@ end
 
 class SGXClient < Blather::Client
 	def register_handler(type, *guards, &block)
-		super(type, *guards) { |stanza| wrap_handler(stanza, &block) }
+		super(type, *guards) { |*args| wrap_handler(*args, &block) }
 	end
 
 	def register_handler_before(type, *guards, &block)
 		check_handler(type, guards)
-		handler = lambda { |stanza| wrap_handler(stanza, &block) }
+		handler = lambda { |*args| wrap_handler(*args, &block) }
 
 		@handlers[type] ||= []
 		@handlers[type].unshift([guards, handler])
@@ -61,8 +61,8 @@ class SGXClient < Blather::Client
 
 protected
 
-	def wrap_handler(stanza, &block)
-		v = block.call(stanza)
+	def wrap_handler(*args, &block)
+		v = block.call(*args)
 		v.catch(&method(:panic)) if v.is_a?(Promise)
 		true # Do not run other handlers unless throw :pass
 	rescue Exception => e

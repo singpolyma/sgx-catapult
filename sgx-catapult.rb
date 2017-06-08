@@ -215,6 +215,13 @@ module SGXcatapult
 	end
 
 	def self.to_catapult(s, murl, num_dest, user_id, token, secret, usern)
+		body = s.respond_to?(:body) ? s.body : ''
+		if murl.to_s.empty? && body.to_s.strip.empty?
+			return EMPromise.reject(
+				[:modify, 'policy-violation']
+			)
+		end
+
 		extra = if murl
 			{
 				media: murl
@@ -234,7 +241,7 @@ module SGXcatapult
 			JSON.dump(extra.merge(
 				from: usern,
 				to:   num_dest,
-				text: s.respond_to?(:body) ? s.body : '',
+				text: body,
 				tag:
 					# callbacks need id and resourcepart
 					WEBrick::HTTPUtils.escape(s.id.to_s) +
@@ -279,7 +286,7 @@ module SGXcatapult
 		}
 	end
 
-	message :chat?, :body do |m|
+	message :body do |m|
 		EMPromise.all([
 			validate_num(m.to.node),
 			fetch_catapult_cred_for(m.from)

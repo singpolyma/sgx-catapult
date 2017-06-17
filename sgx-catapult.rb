@@ -135,10 +135,7 @@ module SGXcatapult
 	end
 
 	def self.error_msg(orig, query_node, type, name, text=nil)
-		if not query_node.nil?
-			orig.add_child(query_node)
-			orig.type = :error
-		end
+		orig.type = :error
 
 		error = Nokogiri::XML::Node.new 'error', orig.document
 		error['type'] = type
@@ -147,6 +144,8 @@ module SGXcatapult
 		suberr = Nokogiri::XML::Node.new name, orig.document
 		suberr['xmlns'] = 'urn:ietf:params:xml:ns:xmpp-stanzas'
 		error.add_child(suberr)
+
+		orig.add_child(query_node) if query_node
 
 		# TODO: add some explanatory xml:lang='en' text (see text param)
 		puts "RESPONSE3: #{orig.inspect}"

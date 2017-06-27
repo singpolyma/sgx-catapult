@@ -100,7 +100,8 @@ module SGXcatapult
 		#  https://api.catapult.inetwork.com/v1/users/[uid]/media/[file]
 
 		# the caller must guarantee that 'to' is a bare JID
-		proxy_url = ARGV[6] + to + '/' + media_url.split('/', 8)[7]
+		proxy_url = ARGV[6] + WEBrick::HTTPUtils.escape(to) + '/' +
+			media_url.split('/', 8)[7]
 
 		puts 'ORIG_URL: ' + media_url
 		puts 'PROX_URL: ' + proxy_url

@@ -286,6 +286,11 @@ module SGXcatapult
 		}
 	end
 
+	message :error? do |m|
+		# TODO: report it somewhere/somehow - eat for now so no err loop
+		puts "EATERROR1: #{m.inspect}"
+	end
+
 	message :body do |m|
 		EMPromise.all([
 			validate_num(m.to.node),

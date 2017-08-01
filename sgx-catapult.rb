@@ -46,6 +46,11 @@ def extract_shortcode(dest)
 	num if context && context == 'phone-context=ca-us.phone-context.soprani.ca'
 end
 
+def is_anonymous_tel?(dest)
+	num, context = dest.split(';', 2)
+	context && context == 'phone-context=anonymous.phone-context.soprani.ca'
+end
+
 class SGXClient < Blather::Client
 	def register_handler(type, *guards, &block)
 		super(type, *guards) { |*args| wrap_handler(*args, &block) }
@@ -267,8 +272,13 @@ module SGXcatapult
 				shortcode = extract_shortcode(num_dest)
 				next shortcode if shortcode
 			end
-			# TODO: text re num not (yet) supportd/implmentd
-			EMPromise.reject([:cancel, 'item-not-found'])
+
+			if is_anonymous_tel?(num_dest)
+				EMPromise.reject([:cancel, 'gone'])
+			else
+				# TODO: text re num not (yet) supportd/implmentd
+				EMPromise.reject([:cancel, 'item-not-found'])
+			end
 		}
 	end
 

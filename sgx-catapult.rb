@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 #
-# Copyright (C) 2017  Denver Gingerich <denver@ossguy.com>
+# Copyright (C) 2017-2018  Denver Gingerich <denver@ossguy.com>
 # Copyright (C) 2017  Stephen Paul Weber <singpolyma@singpolyma.net>
 #
 # This file is part of sgx-catapult.
@@ -262,6 +262,20 @@ module SGXcatapult
 			EMPromise.reject(
 				[:cancel, 'internal-server-error']
 			)
+		}
+
+		t = Time.now
+		tai_timestamp = `./tai`.strip
+		tai_yyyymmdd = Time.at(tai_timestamp.to_i).strftime('%Y%m%d')
+		puts "SMU %d.%09d, %s: msg for %s sent on %s - incrementing\n" %
+			[t.to_i, t.nsec, tai_timestamp, usern, tai_yyyymmdd]
+
+		REDIS.incr('usage_messages-' + tai_yyyymmdd + '-' +
+			usern).then { |total|
+
+			t = Time.now
+			puts "SMU %d.%09d: total msgs for %s-%s now at %s\n" %
+				[t.to_i, t.nsec, tai_yyyymmdd, usern, total]
 		}
 	end
 
@@ -766,8 +780,8 @@ module SGXcatapult
 			"API Secret is password, Phone Number is phone"\
 			".\n\nThe source code for this gateway is at "\
 			"https://gitlab.com/ossguy/sgx-catapult ."\
-			"\nCopyright (C) 2017  Denver Gingerich and "\
-			"others, licensed under AGPLv3+."
+			"\nCopyright (C) 2017-2018  Denver Gingerich "\
+			"and others, licensed under AGPLv3+."
 		n2 = Nokogiri::XML::Node.new 'nick', msg.document
 		n3 = Nokogiri::XML::Node.new 'username', msg.document
 		n4 = Nokogiri::XML::Node.new 'password', msg.document
@@ -805,8 +819,8 @@ module SGXcatapult
 			"account you want to use (ie. '+12345678901')"\
 			".\n\nThe source code for this gateway is at "\
 			"https://gitlab.com/ossguy/sgx-catapult ."\
-			"\nCopyright (C) 2017  Denver Gingerich and "\
-			"others, licensed under AGPLv3+."
+			"\nCopyright (C) 2017-2018  Denver Gingerich "\
+			"and others, licensed under AGPLv3+."
 		msg.add_child(x)
 
 		orig.add_child(msg)

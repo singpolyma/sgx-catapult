@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 #
-# Copyright (C) 2017-2018  Denver Gingerich <denver@ossguy.com>
+# Copyright (C) 2017-2020  Denver Gingerich <denver@ossguy.com>
 # Copyright (C) 2017  Stephen Paul Weber <singpolyma@singpolyma.net>
 #
 # This file is part of sgx-catapult.
@@ -73,6 +73,12 @@ protected
 	rescue Exception => e
 		panic(e)
 	end
+end
+
+# TODO: keep in sync with jmp-acct_bot.rb, and eventually put in common location
+module CatapultSettingFlagBits
+	VOICEMAIL_TRANSCRIPTION_DISABLED = 0
+	MMS_ON_OOB_URL = 1
 end
 
 module SGXcatapult
@@ -219,6 +225,58 @@ module SGXcatapult
 		}
 	end
 
+	def self.to_catapult_possible_oob(s, num_dest, user_id, token, secret,
+		usern)
+
+		xn = s.children.find { |v| v.element_name == "x" }
+		if not xn
+			to_catapult(s, nil, num_dest, user_id, token, secret,
+				usern)
+			return
+		end
+		puts "MMSOOB: found an x node - checking for url node..."
+
+		# TODO: also check for xmlns='jabber:x:oob' in <x/> - the below
+		#  is probably fine, though, as non-OOB <x><url/></x> unlikely
+
+		un = xn.children.find { |v| v.element_name == "url" }
+		if not un
+			puts "MMSOOB: no url node found so process as normal"
+			to_catapult(s, nil, num_dest, user_id, token, secret,
+				usern)
+			return
+		end
+		puts "MMSOOB: found a url node - checking if to make MMS..."
+
+		REDIS.getbit("catapult_setting_flags-#{s.from.stripped}",
+			CatapultSettingFlagBits::MMS_ON_OOB_URL).then { |oob_on|
+
+			puts "MMSOOB: found MMS_ON_OOB_URL value is '#{oob_on}'"
+			if 0 == oob_on
+				puts "MMSOOB: MMS_ON_OOB_URL off so no MMS send"
+				to_catapult(s, nil, num_dest, user_id, token,
+					secret, usern)
+				next
+			end
+
+			# TODO: check size of file at un.text and shrink if need
+
+			body = s.respond_to?(:body) ? s.body : ''
+			puts "MMSOOB: url text is '#{un.text}'"
+			puts "MMSOOB: the body is '#{body.to_s.strip}'"
+
+			# some clients send URI in both body & <url/> so delete
+			if un.text == body.to_s.strip
+				puts "MMSOOB: url matches body so deleting body"
+				s.body = ''
+			end
+
+			puts "MMSOOB: sending MMS since found OOB & user asked"
+			to_catapult(s, un.text, num_dest, user_id, token,
+				secret, usern)
+		}
+	end
+
 	def self.to_catapult(s, murl, num_dest, user_id, token, secret, usern)
 		body = s.respond_to?(:body) ? s.body : ''
 		if murl.to_s.empty? && body.to_s.strip.empty?
@@ -329,7 +387,7 @@ module SGXcatapult
 			if jid
 				pass_on_message(m, creds.last, jid)
 			else
-				to_catapult(m, nil, num_dest, *creds)
+				to_catapult_possible_oob(m, num_dest, *creds)
 			end
 		}.catch { |e|
 			if e.is_a?(Array) && e.length == 2
@@ -780,7 +838,7 @@ module SGXcatapult
 			"API Secret is password, Phone Number is phone"\
 			".\n\nThe source code for this gateway is at "\
 			"https://gitlab.com/ossguy/sgx-catapult ."\
-			"\nCopyright (C) 2017-2018  Denver Gingerich "\
+			"\nCopyright (C) 2017-2020  Denver Gingerich "\
 			"and others, licensed under AGPLv3+."
 		n2 = Nokogiri::XML::Node.new 'nick', msg.document
 		n3 = Nokogiri::XML::Node.new 'username', msg.document
@@ -819,7 +877,7 @@ module SGXcatapult
 			"account you want to use (ie. '+12345678901')"\
 			".\n\nThe source code for this gateway is at "\
 			"https://gitlab.com/ossguy/sgx-catapult ."\
-			"\nCopyright (C) 2017-2018  Denver Gingerich "\
+			"\nCopyright (C) 2017-2020  Denver Gingerich "\
 			"and others, licensed under AGPLv3+."
 		msg.add_child(x)
 

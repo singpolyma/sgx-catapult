@@ -663,6 +663,7 @@ module SGXcatapult
 			#puts "XR[node]: #{xpath_result[0]['node']}"
 
 			msg = i.reply
+			msg.node = i.node
 			msg.identities = user_cap_identities
 			msg.features = user_cap_features
 
@@ -673,6 +674,7 @@ module SGXcatapult
 
 		# respond to capabilities request for sgx-catapult itself
 		msg = i.reply
+		msg.node = i.node
 		msg.identities = [{
 			name: 'Soprani.ca Gateway to XMPP - Catapult',
 			type: 'sms', category: 'gateway'

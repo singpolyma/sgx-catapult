@@ -4,7 +4,7 @@ gem 'activesupport', '<5.0.0'
 gem 'blather'
 gem 'em-hiredis'
 gem 'em-http-request'
-gem 'eventmachine', '1.0.1'
+gem 'eventmachine'
 gem 'promise.rb'
 
 gem 'goliath'

@@ -44,8 +44,15 @@ class WebhookHandler < Goliath::API
 			return EMPromise.reject(405)
 		end
 
+		prefix = ''
+		if user_id.start_with? 'u-'
+			prefix = 'https://api.catapult.inetwork.com/v1/users/'
+		else
+			prefix = 'https://messaging.bandwidth.com/api/v2/users/'
+		end
+
 		EM::HttpRequest.new(
-			"https://api.catapult.inetwork.com/v1/users/"\
+			prefix +
 			"#{user_id}/media/#{media_id}"
 		).public_send(
 			method,
@@ -71,7 +78,7 @@ class WebhookHandler < Goliath::API
 		env.logger.debug 'method: ' + env['REQUEST_METHOD']
 		env.logger.debug 'BODY: ' + Rack::Request.new(env).body.read
 
-		jid, media_id = env['REQUEST_PATH'].split('/')[-2..-1]
+		jid, media_id = env['REQUEST_PATH'].split('/', 3)[1..2]
 		cred_key = "catapult_cred-#{URI.unescape(jid)}"
 
 		REDIS.lrange(cred_key, 0, 2).then { |creds|

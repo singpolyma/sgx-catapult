@@ -84,6 +84,8 @@ class WebhookHandler < Goliath::API
 		REDIS.lrange(cred_key, 0, 2).then { |creds|
 			if creds.length < 3
 				EMPromise.reject(404)
+			elsif not media_id or media_id.empty?
+				EMPromise.reject(404)
 			else
 				media_request(
 					env,

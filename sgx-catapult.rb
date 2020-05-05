@@ -228,11 +228,21 @@ module SGXcatapult
 	def self.to_catapult_possible_oob(s, num_dest, user_id, token, secret,
 		usern)
 
+		REDIS.exists("blocked_sentinel-#{usern}").then { |is_blocked|
+			if 1 == is_blocked
+				puts "BLOCKED message for #{usern}"
+				EMPromise.reject(
+					[:modify, 'policy-violation']
+				)
+			end
+		}.then {
+		# TODO: fix indentation, or delete and revert 2x next to returns
+
 		xn = s.children.find { |v| v.element_name == "x" }
 		if not xn
 			to_catapult(s, nil, num_dest, user_id, token, secret,
 				usern)
-			return
+			next
 		end
 		puts "MMSOOB: found an x node - checking for url node..."
 
@@ -244,7 +254,7 @@ module SGXcatapult
 			puts "MMSOOB: no url node found so process as normal"
 			to_catapult(s, nil, num_dest, user_id, token, secret,
 				usern)
-			return
+			next
 		end
 		puts "MMSOOB: found a url node - checking if to make MMS..."
 
@@ -274,6 +284,8 @@ module SGXcatapult
 			puts "MMSOOB: sending MMS since found OOB & user asked"
 			to_catapult(s, un.text, num_dest, user_id, token,
 				secret, usern)
+		}
+
 		}
 	end
 

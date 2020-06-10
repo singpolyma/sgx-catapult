@@ -236,7 +236,7 @@ module SGXcatapult
 				)
 			end
 		}.then {
-		# TODO: fix indentation, or delete and revert 2x next to returns
+		# TODO: fix indentation, or delete and revert next to return
 
 		un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
 		if not un
@@ -247,31 +247,18 @@ module SGXcatapult
 		end
 		puts "MMSOOB: found a url node - checking if to make MMS..."
 
-		REDIS.getbit("catapult_setting_flags-#{s.from.stripped}",
-			CatapultSettingFlagBits::MMS_ON_OOB_URL).then { |oob_on|
+		# TODO: check size of file at un.text and shrink if need
 
-			puts "MMSOOB: found MMS_ON_OOB_URL value is '#{oob_on}'"
-			if 0 == oob_on
-				puts "MMSOOB: MMS_ON_OOB_URL off so no MMS send"
-				to_catapult(s, nil, num_dest, user_id, token,
-					secret, usern)
-				next
-			end
+		body = s.respond_to?(:body) ? s.body : ''
+		# some clients send URI in both body & <url/> so delete
+		s.body = body.sub(/\s*#{Regexp::escape(un.text)}\s*$/, '')
 
-			# TODO: check size of file at un.text and shrink if need
+		puts "MMSOOB: url text is '#{un.text}'"
+		puts "MMSOOB: the body is '#{body.to_s.strip}'"
 
-			body = s.respond_to?(:body) ? s.body : ''
-			# some clients send URI in both body & <url/> so delete
-			s.body = body.sub(/\s*#{Regexp::escape(un.text)}\s*$/, '')
-
-			puts "MMSOOB: url text is '#{un.text}'"
-			puts "MMSOOB: the body is '#{body.to_s.strip}'"
-
-			puts "MMSOOB: sending MMS since found OOB & user asked"
-			to_catapult(s, un.text, num_dest, user_id, token,
-				secret, usern)
-		}
-
+		puts "MMSOOB: sending MMS since found OOB & user asked"
+		to_catapult(s, un.text, num_dest, user_id, token,
+			secret, usern)
 		}
 	end
 

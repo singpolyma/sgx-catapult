@@ -238,18 +238,7 @@ module SGXcatapult
 		}.then {
 		# TODO: fix indentation, or delete and revert 2x next to returns
 
-		xn = s.children.find { |v| v.element_name == "x" }
-		if not xn
-			to_catapult(s, nil, num_dest, user_id, token, secret,
-				usern)
-			next
-		end
-		puts "MMSOOB: found an x node - checking for url node..."
-
-		# TODO: also check for xmlns='jabber:x:oob' in <x/> - the below
-		#  is probably fine, though, as non-OOB <x><url/></x> unlikely
-
-		un = xn.children.find { |v| v.element_name == "url" }
+		un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
 		if not un
 			puts "MMSOOB: no url node found so process as normal"
 			to_catapult(s, nil, num_dest, user_id, token, secret,

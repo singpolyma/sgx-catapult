@@ -261,14 +261,11 @@ module SGXcatapult
 			# TODO: check size of file at un.text and shrink if need
 
 			body = s.respond_to?(:body) ? s.body : ''
+			# some clients send URI in both body & <url/> so delete
+			s.body = body.sub(/\s*#{Regexp::escape(un.text)}\s*$/, '')
+
 			puts "MMSOOB: url text is '#{un.text}'"
 			puts "MMSOOB: the body is '#{body.to_s.strip}'"
-
-			# some clients send URI in both body & <url/> so delete
-			if un.text == body.to_s.strip
-				puts "MMSOOB: url matches body so deleting body"
-				s.body = ''
-			end
 
 			puts "MMSOOB: sending MMS since found OOB & user asked"
 			to_catapult(s, un.text, num_dest, user_id, token,

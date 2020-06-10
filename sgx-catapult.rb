@@ -236,29 +236,27 @@ module SGXcatapult
 				)
 			end
 		}.then {
-		# TODO: fix indentation, or delete and revert next to return
+		  un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
+		  if not un
+			 puts "MMSOOB: no url node found so process as normal"
+			 to_catapult(s, nil, num_dest, user_id, token, secret,
+				  usern)
+			 next
+		  end
+		  puts "MMSOOB: found a url node - checking if to make MMS..."
 
-		un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
-		if not un
-			puts "MMSOOB: no url node found so process as normal"
-			to_catapult(s, nil, num_dest, user_id, token, secret,
-				usern)
-			next
-		end
-		puts "MMSOOB: found a url node - checking if to make MMS..."
+		  # TODO: check size of file at un.text and shrink if need
 
-		# TODO: check size of file at un.text and shrink if need
+		  body = s.respond_to?(:body) ? s.body : ''
+		  # some clients send URI in both body & <url/> so delete
+		  s.body = body.sub(/\s*#{Regexp::escape(un.text)}\s*$/, '')
 
-		body = s.respond_to?(:body) ? s.body : ''
-		# some clients send URI in both body & <url/> so delete
-		s.body = body.sub(/\s*#{Regexp::escape(un.text)}\s*$/, '')
+		  puts "MMSOOB: url text is '#{un.text}'"
+		  puts "MMSOOB: the body is '#{body.to_s.strip}'"
 
-		puts "MMSOOB: url text is '#{un.text}'"
-		puts "MMSOOB: the body is '#{body.to_s.strip}'"
-
-		puts "MMSOOB: sending MMS since found OOB & user asked"
-		to_catapult(s, un.text, num_dest, user_id, token,
-			secret, usern)
+		  puts "MMSOOB: sending MMS since found OOB & user asked"
+		  to_catapult(s, un.text, num_dest, user_id, token,
+			 secret, usern)
 		}
 	end
 

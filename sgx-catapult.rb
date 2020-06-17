@@ -230,7 +230,9 @@ module SGXcatapult
 
 		REDIS.exists("blocked_sentinel-#{usern}").then { |is_blocked|
 			if 1 == is_blocked
-				puts "BLOCKED message for #{usern}"
+				t = Time.now
+				puts "LOG %d.%09d: BLOCKED message for %s" %
+					[t.to_i, t.nsec, usern]
 				EMPromise.reject(
 					[:modify, 'policy-violation']
 				)

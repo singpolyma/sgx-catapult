@@ -84,6 +84,8 @@ end
 module SGXcatapult
 	extend Blather::DSL
 
+	@last_message_text = Hash.new('')
+	@last_message_count = Hash.new(1)
 	@jingle_sids = {}
 	@jingle_fnames = {}
 	@partial_data = {}
@@ -241,8 +243,8 @@ module SGXcatapult
 			un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
 			if not un
 				puts "MMSOOB: no url node found so process as normal"
-				to_catapult(s, nil, num_dest, user_id, token, secret,
-					usern)
+				to_catapult_possible_spam(s, num_dest, user_id,
+					token, secret, usern)
 				next
 			end
 			puts "MMSOOB: found a url node - checking if to make MMS..."
@@ -259,6 +261,49 @@ module SGXcatapult
 			puts "MMSOOB: sending MMS since found OOB & user asked"
 			to_catapult(s, un.text, num_dest, user_id, token,
 				secret, usern)
+		}
+	end
+
+	def self.to_catapult_possible_spam(s, num_dest, user_id, token, secret,
+		usern)
+
+		if s.body == @last_message_text[usern]
+			@last_message_count[usern] += 1
+			puts "dupe message count for #{usern} now at " +
+				 @last_message_count[usern].to_s
+		else
+			@last_message_text[usern] = s.body
+			@last_message_count[usern] = 1
+		end
+
+		REDIS.mget('settings_spam-dupe_min',
+			'settings_spam-dupe_max').then { |(min, max)|
+
+		# TODO: fix indenting
+		if !min or !max
+			min = 5
+			max = 45
+		end
+
+		trigger_number = SecureRandom.random_number(min.to_i..max.to_i)
+
+		if @last_message_count[usern] >= trigger_number
+			REDIS.setnx("blocked_sentinel-#{usern}", '').then { |rv|
+
+				t = Time.now
+				puts "LOG %d.%09d: SPAM block added for %s "\
+					"with return value %d and count %d "\
+					"and trigger number %d (min/max %d/%d)"\
+					" - message ignored (no error/receipt)"%
+					[t.to_i, t.nsec, usern, rv,
+						@last_message_count[usern],
+						trigger_number, min, max]
+			}
+		else
+			to_catapult(s, nil, num_dest, user_id, token, secret,
+				usern)
+		end
+
 		}
 	end
 

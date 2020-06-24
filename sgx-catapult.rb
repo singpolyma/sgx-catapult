@@ -243,9 +243,8 @@ module SGXcatapult
 			un = s.at("oob|x > oob|url", oob: "jabber:x:oob")
 			if not un
 				puts "MMSOOB: no url node found so process as normal"
-				to_catapult_possible_spam(s, num_dest, user_id,
+				next to_catapult_possible_spam(s, num_dest, user_id,
 					token, secret, usern)
-				next
 			end
 			puts "MMSOOB: found a url node - checking if to make MMS..."
 

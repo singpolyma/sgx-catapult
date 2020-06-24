@@ -291,22 +291,40 @@ module SGXcatapult
 		trigger_number = SecureRandom.random_number(min.to_i..max.to_i)
 
 		if @last_message_count[usern] >= trigger_number
-			REDIS.setnx("blocked_sentinel-#{usern}", '').then { |rv|
 
-				t = Time.now
-				puts "LOG %d.%09d: SPAM block added for %s "\
-					"with return value %d and count %d "\
-					"and trigger number %d (min/max %d/%d)"\
-					" - message ignored (no error/receipt)"%
-					[t.to_i, t.nsec, usern, rv,
-						@last_message_count[usern],
-						trigger_number, min, max]
+			REDIS.exists("settings_spam-allowlist-#{usern}").then { |allow|
+				if 1 == allow
+
+					t = Time.now
+					puts "LOG %d.%09d: ALLOW avoids block for %s "\
+						"with allow value %d and count %d "\
+						"and trigger number %d (min/max %d/%d)"%
+						[t.to_i, t.nsec, usern, allow,
+							@last_message_count[usern],
+							trigger_number, min, max]
+					to_catapult(s, nil, num_dest, user_id, token,
+						secret, usern)
+				else
+					REDIS.setnx("blocked_sentinel-#{usern}", '').then { |rv|
+
+						t = Time.now
+						puts "LOG %d.%09d: SPAM block added for %s "\
+							"with rv %d, allow %d and count %d "\
+							"and trigger number %d (min/max %d/%d)"%
+							[t.to_i, t.nsec, usern, rv, allow,
+								@last_message_count[usern],
+								trigger_number, min, max]
+						EMPromise.reject(
+							[:modify, 'policy-violation']
+						)
+					}
+
+				end
 			}
 		else
 			to_catapult(s, nil, num_dest, user_id, token, secret,
 				usern)
 		end
-
 		}
 	end
 

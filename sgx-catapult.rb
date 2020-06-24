@@ -274,6 +274,10 @@ module SGXcatapult
 		else
 			@last_message_text[usern] = s.body
 			@last_message_count[usern] = 1
+
+			# return immediately to avoid unnecessary database hit
+			return to_catapult(s, nil, num_dest, user_id, token,
+				secret, usern)
 		end
 
 		REDIS.mget('settings_spam-dupe_min',

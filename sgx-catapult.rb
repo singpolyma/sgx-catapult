@@ -988,6 +988,11 @@ class WebhookHandler < Goliath::API
 	def response(env)
 		puts 'ENV: ' + env.reject{ |k| k == 'params' }.to_s
 
+		if params.empty?
+			puts 'PARAMS empty!'
+			return [200, {}, "OK"]
+		end
+
 		users_num = ''
 		others_num = ''
 		if params['direction'] == 'in'

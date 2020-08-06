@@ -434,8 +434,17 @@ module SGXcatapult
 				[jid, num_dest] + creds
 			}
 		}.then { |(jid, num_dest, *creds)|
-			# if destination user is in the system pass on directly
 			if jid
+				cred_key = "catapult_cred-#{jid}"
+				REDIS.lrange(cred_key, 0, 0).then { |other_user|
+					[jid, num_dest] + creds + other_user
+				}
+			else
+				[jid, num_dest] + creds + [nil]
+			end
+		}.then { |(jid, num_dest, *creds, other_user)|
+			# if destination user is in the system pass on directly
+			if other_user and other_user.start_with? 'u-'
 				pass_on_message(m, creds.last, jid)
 			else
 				to_catapult_possible_oob(m, num_dest, *creds)

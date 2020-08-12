@@ -86,6 +86,8 @@ module SGXcatapult
 
 	@last_message_text = Hash.new('')
 	@last_message_count = Hash.new(1)
+	@last_message_had_httpx = Hash.new(false)
+	@last_messages_with_httpx_count = Hash.new(1)
 	@jingle_sids = {}
 	@jingle_fnames = {}
 	@partial_data = {}
@@ -266,6 +268,8 @@ module SGXcatapult
 	def self.to_catapult_possible_spam(s, num_dest, user_id, token, secret,
 		usern)
 
+		fine = false
+
 		if s.body == @last_message_text[usern]
 			@last_message_count[usern] += 1
 			puts "dupe message count for #{usern} now at " +
@@ -274,9 +278,31 @@ module SGXcatapult
 			@last_message_text[usern] = s.body
 			@last_message_count[usern] = 1
 
-			# return immediately to avoid unnecessary database hit
-			return to_catapult(s, nil, num_dest, user_id, token,
-				secret, usern)
+			fine = true
+		end
+
+		if /http:\/\/|https:\/\// =~ s.body.to_s
+			if @last_message_had_httpx[usern]
+				@last_messages_with_httpx_count[usern] += 1
+				puts "httpx message count for #{usern} now @ " +
+				 @last_messages_with_httpx_count[usern].to_s
+			end
+			@last_message_had_httpx[usern] = true
+
+			t = Time.now
+			tai_timestamp = `./tai`.strip
+			tai_yyyymmdd = Time.at(tai_timestamp.to_i).strftime(
+				'%Y%m%d')
+			REDIS.incr('usage_httpx-' + tai_yyyymmdd + '-' + usern)
+		else
+			@last_message_had_httpx[usern] = false
+			@last_messages_with_httpx_count[usern] = 1
+
+			if fine
+				# return immediately to avoid unnecessary DB hit
+				return to_catapult(s, nil, num_dest, user_id,
+					token, secret, usern)
+			end
 		end
 
 		REDIS.mget('settings_spam-dupe_min',
@@ -322,8 +348,55 @@ module SGXcatapult
 				end
 			}
 		else
-			to_catapult(s, nil, num_dest, user_id, token, secret,
-				usern)
+			REDIS.mget('settings_spam-subsequent_httpx_min',
+				'settings_spam-subsequent_httpx_max').then { |(hx_min, hx_max)|
+
+			# TODO: fix indenting
+			if !hx_min or !hx_max
+				hx_min = 5
+				hx_max = 45
+			end
+
+			hx_trigger_number = SecureRandom.random_number(hx_min.to_i..hx_max.to_i)
+
+			if @last_messages_with_httpx_count[usern] >= hx_trigger_number
+
+				REDIS.exists("settings_spam-allowlist-#{usern}").then { |hallow|
+					if 1 == hallow
+
+						t = Time.now
+						puts "LOG %d.%09d: ALLOW avoids h block for %s"\
+							" with allow value %d and count %d "\
+							"and trigger number %d (min/max %d/%d)"%
+							[t.to_i, t.nsec, usern, hallow,
+							 @last_messages_with_httpx_count[usern],
+							 hx_trigger_number, hx_min, hx_max]
+						to_catapult(s, nil, num_dest, user_id, token,
+							secret, usern)
+					else
+						REDIS.setnx("blocked_sentinel-#{usern}",
+							'').then { |hrv|
+
+							t = Time.now
+							puts "LOG %d.%09d: SPAM h block added "\
+								"for %s with rv %d, allow %d "\
+								"and count %d and trigger "\
+								"number %d (min/max %d/%d)" %
+							 [t.to_i, t.nsec, usern, hrv, hallow,
+							 @last_messages_with_httpx_count[usern],
+							 hx_trigger_number, hx_min, hx_max]
+							EMPromise.reject(
+								[:modify, 'policy-violation']
+							)
+						}
+
+					end
+				}
+			else
+				to_catapult(s, nil, num_dest, user_id, token,
+					secret, usern)
+			end
+			}
 		end
 		}
 	end

@@ -790,6 +790,15 @@ module SGXcatapult
 	end
 
 	iq '/iq/ns:query', ns:	'http://jabber.org/protocol/disco#info' do |i|
+		# TODO: return error if i.type is :set - if it is :reply or
+		#  :error it should be ignored (as the below does currently);
+		#  review specification to see how to handle other type values
+		if i.type != :get
+			puts 'DISCO iq rcvd, of non-get type "' + i.type.to_s +
+				'" for message "' + i.inspect + '"; ignoring...'
+			next
+		end
+
 		# respond to capabilities request for an sgx-catapult number JID
 		if i.to.node
 			# TODO: confirm the node URL is expected using below

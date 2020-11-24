@@ -1084,6 +1084,20 @@ class WebhookHandler < Goliath::API
 			return [200, {}, "OK"]
 		end
 
+		if env['REQUEST_URI'] != '/'
+			puts 'BADREQUEST1: non-/ request "' +
+				env['REQUEST_URI'] + '", method "' +
+				env['REQUEST_METHOD'] + '"'
+			return [200, {}, "OK"]
+		end
+
+		if env['REQUEST_METHOD'] != 'POST'
+			puts 'BADREQUEST2: non-POST request; URI: "' +
+				env['REQUEST_URI'] + '", method "' +
+				env['REQUEST_METHOD'] + '"'
+			return [200, {}, "OK"]
+		end
+
 		users_num = ''
 		others_num = ''
 		if params['direction'] == 'in'

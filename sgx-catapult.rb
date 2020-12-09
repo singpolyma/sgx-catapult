@@ -300,8 +300,27 @@ module SGXcatapult
 
 			if fine
 				# return immediately to avoid unnecessary DB hit
-				return to_catapult(s, nil, num_dest, user_id,
-					token, secret, usern)
+				# TODO: put in function instead of copying below
+				if num_dest.start_with? '+1'
+					return to_catapult(s, nil, num_dest,
+						user_id, token, secret, usern)
+				else
+					t = Time.now
+					puts "LOG %d.%09d: INTL1check for %s to %s" %
+						[t.to_i, t.nsec, usern, num_dest]
+
+					if $cheogram_did == usern
+						t = Time.now
+						puts "LOG %d.%09d: INTL1blocked to %s" %
+							[t.to_i, t.nsec, num_dest]
+						return EMPromise.reject(
+							[:modify, 'policy-violation']
+						)
+					else
+						return to_catapult(s, nil, num_dest,
+							user_id, token, secret, usern)
+					end
+				end
 			end
 		end
 
@@ -393,8 +412,27 @@ module SGXcatapult
 					end
 				}
 			else
-				to_catapult(s, nil, num_dest, user_id, token,
-					secret, usern)
+				# TODO: put in function instead of copying above
+				if num_dest.start_with? '+1'
+					to_catapult(s, nil, num_dest,
+						user_id, token, secret, usern)
+				else
+					t = Time.now
+					puts "LOG %d.%09d: INTL2check for %s to %s" %
+						[t.to_i, t.nsec, usern, num_dest]
+
+					if $cheogram_did == usern
+						t = Time.now
+						puts "LOG %d.%09d: INTL2blocked to %s" %
+							[t.to_i, t.nsec, num_dest]
+						EMPromise.reject(
+							[:modify, 'policy-violation']
+						)
+					else
+						to_catapult(s, nil, num_dest,
+							user_id, token, secret, usern)
+					end
+				end
 			end
 			}
 		end

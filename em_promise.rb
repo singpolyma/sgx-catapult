@@ -1,5 +1,3 @@
-#!/usr/bin/env ruby
-#
 # Copyright (C) 2017  Stephen Paul Weber <singpolyma@singpolyma.net>
 #
 # This file is part of sgx-catapult.

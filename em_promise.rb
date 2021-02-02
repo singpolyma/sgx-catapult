@@ -1,5 +1,3 @@
-#!/usr/bin/env ruby
-#
 # Copyright (C) 2017  Stephen Paul Weber <singpolyma@singpolyma.net>
 #
 # This file is part of sgx-catapult.
@@ -51,6 +49,16 @@ class EMPromise < Promise
 
 	def self.reject(e)
 		new.tap { |promise| promise.reject(e) }
+	end
+
+	def self.all(enumerable)
+		super(enumerable.map { |input|
+			if input.respond_to?(:promise)
+				input.promise
+			else
+				input
+			end
+		})
 	end
 end
 

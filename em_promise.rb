@@ -52,6 +52,16 @@ class EMPromise < Promise
 	def self.reject(e)
 		new.tap { |promise| promise.reject(e) }
 	end
+
+	def self.all(enumerable)
+		super(enumerable.map { |input|
+			if input.respond_to?(:promise)
+				input.promise
+			else
+				input
+			end
+		})
+	end
 end
 
 module EventMachine

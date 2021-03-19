@@ -9,6 +9,7 @@ gem 'promise.rb'
 
 gem 'goliath'
 gem 'log4r'
+gem 'statsd-instrument'
 
 group :development do
 	gem 'rubocop', require: false

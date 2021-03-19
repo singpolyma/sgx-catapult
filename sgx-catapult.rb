@@ -23,6 +23,7 @@ require 'em-hiredis'
 require 'em-http-request'
 require 'json'
 require 'securerandom'
+require 'statsd-instrument'
 require 'time'
 require 'uri'
 require 'webrick'
@@ -258,6 +259,7 @@ module SGXcatapult
 
 			puts "MMSOOB: url text is '#{un.text}'"
 			puts "MMSOOB: the body is '#{body.to_s.strip}'"
+			StatsD.increment("messages.outbound.mms")
 
 			puts "MMSOOB: sending MMS since found OOB & user asked"
 			to_catapult(s, un.text, num_dest, user_id, token,
@@ -282,6 +284,7 @@ module SGXcatapult
 		end
 
 		if /http:\/\/|https:\/\// =~ s.body.to_s
+			StatsD.increment("messages.outbound.http", tags: { tel: usern })
 			if @last_message_had_httpx[usern]
 				@last_messages_with_httpx_count[usern] += 1
 				puts "httpx message count for #{usern} now @ " +
@@ -305,6 +308,10 @@ module SGXcatapult
 					return to_catapult(s, nil, num_dest,
 						user_id, token, secret, usern)
 				else
+					StatsD.increment(
+						"messages.outbound.international",
+						tags: { tel: usern }
+					)
 					t = Time.now
 					puts "LOG %d.%09d: INTL1check for %s to %s" %
 						[t.to_i, t.nsec, usern, num_dest]
@@ -556,11 +563,14 @@ module SGXcatapult
 		}.then { |(jid, num_dest, *creds, other_user)|
 			# if destination user is in the system pass on directly
 			if other_user and other_user.start_with? 'u-'
+				StatsD.increment("messages.outbound.short-circuit")
 				pass_on_message(m, creds.last, jid)
 			else
+				StatsD.increment("messages.outbound.to-bandwidth")
 				to_catapult_possible_oob(m, num_dest, *creds)
 			end
 		}.catch { |e|
+			StatsD.increment("messages.outbound.failed")
 			if e.is_a?(Array) && e.length == 2
 				write_to_stream error_msg(m.reply, m.body, *e)
 			else
@@ -1187,11 +1197,14 @@ class WebhookHandler < Goliath::API
 		msg = ''
 		case params['direction']
 		when 'in'
+			StatsD.increment("messages.inbound")
 			text = ''
 			case params['eventType']
 			when 'sms'
+				StatsD.increment("messages.inbound.sms")
 				text = params['text']
 			when 'mms'
+				StatsD.increment("messages.inbound.mms")
 				has_media = false
 				params['media'].each do |media_url|
 					if not media_url.end_with?(
@@ -1250,6 +1263,7 @@ class WebhookHandler < Goliath::API
 
 			case params['deliveryState']
 			when 'not-delivered'
+				StatsD.increment("messages.outbound.not-delivered")
 				# create a bare message like the one user sent
 				msg = Blather::Stanza::Message.new(
 					others_num + '@' + ARGV[0])
@@ -1263,6 +1277,7 @@ class WebhookHandler < Goliath::API
 					:wait
 				).to_node
 			when 'delivered'
+				StatsD.increment("messages.outbound.delivered")
 				msg = ReceiptMessage.new(bare_jid)
 
 				# TODO: put in member/instance variable
